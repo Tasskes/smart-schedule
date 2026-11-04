@@ -26,6 +26,16 @@ services:
     depends_on:
       - app
 
+  # VPN-клиент (VLESS) — только чтобы бот достучался до Telegram.
+  # Включается строкой COMPOSE_PROFILES=vpn в .env, конфиг xray.json создаёт скрипт vless-to-xray.
+  xray:
+    image: teddysun/xray
+    profiles:
+      - vpn
+    restart: unless-stopped
+    volumes:
+      - ./xray.json:/etc/xray/config.json:ro
+
 volumes:
   caddy_data:
   caddy_config:
