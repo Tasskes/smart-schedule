@@ -32,7 +32,7 @@ function NoteCard({ n }: { n: NoteRec }) {
         <span className="tiny muted nowrap">{fmt(n.createdAt)}</span>
       </div>
       <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>
-        <span className="badge">{n.source === 'telegram' ? '📨 из Telegram' : '✍️ своя'}</span>
+        <span className="badge">{n.source === 'telegram' ? '📨 из мессенджера' : '✍️ своя'}</span>
         {n.from ? <span className="badge">от: {n.from}</span> : null}
       </div>
       {n.text && n.text !== n.title ? (
@@ -72,13 +72,14 @@ export function NotesScreen() {
   const notes = useTable('notes');
   const [filter, setFilter] = useState<'new' | 'all'>('new');
   const [text, setText] = useState('');
-  const [tgLinked, setTgLinked] = useState<boolean | null>(null);
+  const [botLinked, setBotLinked] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!hasServer()) return;
-    api<{ linked: boolean }>('/api/telegram')
-      .then((s) => setTgLinked(s.linked))
-      .catch(() => setTgLinked(null));
+    Promise.all([
+      api<{ linked: boolean }>('/api/vk').catch(() => ({ linked: false })),
+      api<{ linked: boolean }>('/api/telegram').catch(() => ({ linked: false })),
+    ]).then(([v, t]) => setBotLinked(v.linked || t.linked));
   }, []);
 
   const list = useMemo(
@@ -94,11 +95,11 @@ export function NotesScreen() {
 
   return (
     <>
-      {tgLinked === false ? (
+      {botLinked === false ? (
         <div className="banner info small">
           <span>📨</span>
           <div className="grow">
-            Подключи Telegram-бота — пересылай ему заметки, задачи и сообщения репетитора, а ИИ сам разложит их по приложению.{' '}
+            Подключи бота во ВКонтакте или Telegram — пересылай ему заметки, задачи и сообщения репетитора, а ИИ сам разложит их по приложению.{' '}
             <button className="btn ghost small" style={{ padding: 0, minHeight: 0 }} onClick={() => openSub('settings')}>
               Подключить
             </button>
@@ -113,7 +114,7 @@ export function NotesScreen() {
       </div>
       <Seg<'new' | 'all'> value={filter} onChange={setFilter} options={[{ v: 'new', label: 'Неразобранные' }, { v: 'all', label: 'Все' }]} />
       <div style={{ height: 10 }} />
-      {list.length ? list.map((n) => <NoteCard key={n.id} n={n} />) : <Empty emoji="📥" title="Заметок нет">Всё, что пришлёшь боту в Telegram и не получится сразу превратить в задачу, окажется здесь.</Empty>}
+      {list.length ? list.map((n) => <NoteCard key={n.id} n={n} />) : <Empty emoji="📥" title="Заметок нет">Всё, что пришлёшь боту (ВКонтакте или Telegram) и не получится сразу превратить в задачу, окажется здесь.</Empty>}
     </>
   );
 }

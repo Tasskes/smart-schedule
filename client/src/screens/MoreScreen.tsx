@@ -6,7 +6,7 @@ import { openSub, type Sub } from '../nav';
 const ITEMS: { sub: Sub; emoji: string; title: string; hint: string }[] = [
   { sub: 'goals', emoji: '🎯', title: 'Цели', hint: '5 лет → год → полгода → квартал → месяц → неделя' },
   { sub: 'tasks', emoji: '✅', title: 'Задачи', hint: 'Оценка объёма и времени ИИ, дедлайны' },
-  { sub: 'notes', emoji: '📥', title: 'Заметки и входящие', hint: 'Мысли, идеи и всё, что пришло из Telegram' },
+  { sub: 'notes', emoji: '📥', title: 'Заметки и входящие', hint: 'Мысли, идеи и всё, что пришло боту в ВК или Telegram' },
   { sub: 'variables', emoji: '🧮', title: 'Переменные', hint: 'Постоянные значения и формулы для распорядка' },
   { sub: 'routines', emoji: '🔁', title: 'Распорядок', hint: 'Подъём, дорога, отбой — то, что повторяется' },
   { sub: 'rewards', emoji: '🪙', title: 'Монеты и награды', hint: 'Баланс, уровень, магазин наград' },

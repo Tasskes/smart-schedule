@@ -129,6 +129,7 @@ export async function mockComplete({ messages }) {
       };
       break;
     }
+    case 'inbox':
     case 'tg': {
       const actions = [];
       if (/съел|выпил|на завтрак|на обед|на ужин/.test(userText)) {

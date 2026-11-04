@@ -68,6 +68,118 @@ interface TgStatus {
   error: string | null;
 }
 
+interface VkStatus {
+  configured: boolean;
+  groupName: string | null;
+  link: string | null;
+  linked: boolean;
+  ownerName: string | null;
+  code: string | null;
+  notify: boolean;
+  error: string | null;
+}
+
+function VkCard() {
+  const [st, setSt] = useState<VkStatus | null>(null);
+  const [err, setErr] = useState('');
+  const load = () =>
+    api<VkStatus>('/api/vk')
+      .then((s) => {
+        setSt(s);
+        setErr('');
+      })
+      .catch((e) => setErr((e as Error).message));
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (err) return <div className="card small err-text">{err}</div>;
+  if (!st) return <div className="card small muted">Загружаю…</div>;
+  if (!st.configured) {
+    return (
+      <div className="card small">
+        <div>
+          Бот ВКонтакте работает через твоё сообщество (можно закрытое, только для себя). Настройка ~5 минут:
+          <ol style={{ margin: '8px 0', paddingLeft: 18 }}>
+            <li>ВКонтакте → Сообщества → <b>Создать сообщество</b> (тип любой, например «Группа по интересам»).</li>
+            <li>
+              Управление → <b>Сообщения</b>: включить. Там же <b>Настройки для бота → Возможности ботов: включены</b>.
+            </li>
+            <li>
+              Управление → <b>Работа с API → Ключи доступа → Создать ключ</b>: отметь «Управление сообществом» и «Сообщения сообщества». Скопируй ключ.
+            </li>
+            <li>
+              Работа с API → <b>Long Poll API</b>: включить, версия API <b>5.199</b>. Во вкладке «Типы событий» отметь «Входящее сообщение» и «Действие с сообщением».
+            </li>
+            <li>
+              На сервере добавь в <span className="kbd">.env</span>: <span className="kbd">VK_GROUP_TOKEN=ключ</span> и <span className="kbd">VK_GROUP_ID=номер</span> (цифры из адреса
+              сообщества или из «Работа с API»), затем <span className="kbd">docker compose up -d</span>.
+            </li>
+          </ol>
+        </div>
+        <button className="btn small secondary" onClick={load}>
+          Проверить снова
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="card small">
+      {st.linked ? (
+        <>
+          <div className="row between">
+            <span>{st.groupName ? `Сообщество «${st.groupName}»` : 'Бот ВКонтакте'}</span>
+            <b style={{ color: 'var(--ok)' }}>подключён{st.ownerName ? ` · ${st.ownerName}` : ''}</b>
+          </div>
+          <div className="tiny muted" style={{ margin: '6px 0' }}>
+            Пиши или пересылай в сообщения сообщества задачи, заметки, сообщения репетитора, что съел и что купил. Команды словами: «сегодня», «завтра», «задачи».
+          </div>
+          <Toggle
+            label="Дублировать напоминания во ВКонтакте"
+            hint="Пары, дела, утренняя сводка и изменения в расписании"
+            checked={st.notify}
+            onChange={(v) => api<VkStatus>('/api/vk/settings', { body: { notify: v } }).then(setSt).catch((e) => toast((e as Error).message))}
+          />
+          <button
+            className="btn small danger"
+            onClick={() => {
+              if (!confirm('Отключить бота ВКонтакте?')) return;
+              api<VkStatus>('/api/vk/unlink', { body: {} }).then(setSt);
+            }}
+          >
+            Отключить
+          </button>
+        </>
+      ) : (
+        <>
+          <div>
+            Бот {st.groupName ? <b>«{st.groupName}»</b> : ''} готов. Открой сообщения сообщества и отправь туда этот код:
+          </div>
+          <div className="row" style={{ margin: '10px 0' }}>
+            <span className="big-num" style={{ fontSize: 28, letterSpacing: '0.12em' }}>
+              {st.code}
+            </span>
+            <button className="btn small secondary" onClick={() => st.code && navigator.clipboard?.writeText(st.code).then(() => toast('Код скопирован'))}>
+              Копировать
+            </button>
+          </div>
+          {st.error ? <div className="err-text" style={{ marginBottom: 6 }}>Связь с ВКонтакте: {st.error}</div> : null}
+          <div className="grid-2">
+            {st.link ? (
+              <a className="btn small" href={st.link} target="_blank" rel="noreferrer">
+                Открыть ВКонтакте
+              </a>
+            ) : null}
+            <button className="btn small secondary" onClick={load}>
+              Я отправил код
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function TelegramCard() {
   const [st, setSt] = useState<TgStatus | null>(null);
   const [err, setErr] = useState('');
@@ -137,7 +249,14 @@ function TelegramCard() {
       ) : (
         <>
           <div>Бот {st.username ? <b>@{st.username}</b> : ''} готов. Нажми «Подключить» — откроется Telegram, там нажми «Запустить» (Start).</div>
-          {st.error ? <div className="err-text" style={{ marginTop: 6 }}>Связь с Telegram: {st.error}</div> : null}
+          {st.error ? (
+            <div className="err-text" style={{ marginTop: 6 }}>
+              Связь с Telegram: {st.error}
+              <div className="tiny muted" style={{ marginTop: 4 }}>
+                Если Telegram недоступен с сервера, используй бота ВКонтакте (выше) или укажи прокси в .env: TELEGRAM_PROXY=http://логин:пароль@хост:порт
+              </div>
+            </div>
+          ) : null}
           <div className="grid-2" style={{ marginTop: 10 }}>
             {st.startLink ? (
               <a className="btn small" href={st.startLink} target="_blank" rel="noreferrer">
@@ -314,6 +433,9 @@ export function SettingsScreen() {
               </>
             )}
           </div>
+
+          <div className="section-title">Бот ВКонтакте</div>
+          <VkCard />
 
           <div className="section-title">Telegram-бот</div>
           <TelegramCard />

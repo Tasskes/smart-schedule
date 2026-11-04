@@ -418,3 +418,5 @@ main.content.chat-main { padding-bottom: calc(var(--tab-h) + env(safe-area-inset
 .note-card .note-text { white-space: pre-wrap; word-break: break-word; font-size: 14px; margin-top: 4px; }
 .note-card .note-text.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .note-card.done { opacity: 0.55; }
+
+a.btn { text-decoration: none; }

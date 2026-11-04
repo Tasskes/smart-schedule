@@ -13,6 +13,7 @@ import {
   startReminderLoop, subscriptionCount, vapidPublicKey,
 } from './push.js';
 import { setTgNotify, startTelegramBot, tgStatus, unlinkTelegram } from './telegram.js';
+import { setVkNotify, startVkBot, unlinkVk, vkStatus } from './vk.js';
 
 if (!config.password) {
   console.error('Не задан APP_PASSWORD (пароль для входа в приложение). Укажи его в .env');
@@ -81,6 +82,16 @@ app.post('/api/telegram/settings', (req, res) => {
   res.json(tgStatus());
 });
 
+app.get('/api/vk', (req, res) => res.json(vkStatus()));
+app.post('/api/vk/unlink', (req, res) => {
+  unlinkVk();
+  res.json(vkStatus());
+});
+app.post('/api/vk/settings', (req, res) => {
+  if (typeof req.body?.notify === 'boolean') setVkNotify(req.body.notify);
+  res.json(vkStatus());
+});
+
 app.post('/api/agenda', (req, res) => {
   const agenda = saveAgenda(req.body || {});
   res.json({ ok: true, items: agenda.items.length });
@@ -129,4 +140,5 @@ app.listen(config.port, () => {
   startSchedulePolling();
   startReminderLoop();
   void startTelegramBot();
+  void startVkBot();
 });

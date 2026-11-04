@@ -43,6 +43,12 @@ export const config = {
     },
   },
   vapidSubject: env.VAPID_SUBJECT || 'mailto:smart-schedule@example.com',
+  vk: {
+    token: env.VK_GROUP_TOKEN || '',
+    groupId: String(env.VK_GROUP_ID || '').replace(/^(club|public)/, '').trim(),
+    apiBase: (env.VK_API_BASE || 'https://api.vk.com').replace(/\/$/, ''),
+    version: env.VK_API_VERSION || '5.199',
+  },
   telegram: {
     token: env.TELEGRAM_BOT_TOKEN || '',
     apiBase: (env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/$/, ''),

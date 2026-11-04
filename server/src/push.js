@@ -5,6 +5,7 @@ import { db, kv } from './db.js';
 import { classesForDates } from './tulsu.js';
 import { addDays, localDateStr, localTs, tzOffsetMin } from './time.js';
 import { esc, sendToOwner, tgNotifyEnabled } from './tgapi.js';
+import { sendVkToOwner, vkNotifyEnabled } from './vkapi.js';
 
 let vapid = kv.get('vapid');
 if (!vapid) {
@@ -53,7 +54,7 @@ export async function sendToAll(payload) {
   return ok;
 }
 
-/** Уведомление: web push на телефон + (если включено) дубль в Telegram */
+/** Уведомление: web push на телефон + (если включено) дубль в Telegram и ВКонтакте */
 export async function notify(payload) {
   let n = await sendToAll(payload);
   if (tgNotifyEnabled()) {
@@ -61,6 +62,13 @@ export async function notify(payload) {
       if (await sendToOwner(`🔔 <b>${esc(payload.title)}</b>${payload.body ? `\n${esc(payload.body)}` : ''}`)) n += 1;
     } catch (e) {
       console.warn('[tg] notify failed:', e.message);
+    }
+  }
+  if (vkNotifyEnabled()) {
+    try {
+      if (await sendVkToOwner(`🔔 ${payload.title}${payload.body ? `\n${payload.body}` : ''}`)) n += 1;
+    } catch (e) {
+      console.warn('[vk] notify failed:', e.message);
     }
   }
   return n;
