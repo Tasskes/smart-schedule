@@ -6,6 +6,7 @@ import { loginHandler, requireAuth } from './auth.js';
 import { aiHandler, aiInfo, monthUsage } from './ai/index.js';
 import { syncHandler } from './sync.js';
 import { fileHandler } from './files.js';
+import { solvePhotoHandler } from './solve.js';
 import {
   getSnapshot, onScheduleChanges, recentChanges, refreshSchedule, startSchedulePolling,
 } from './tulsu.js';
@@ -60,6 +61,7 @@ app.get('/api/schedule', asyncRoute(async (req, res) => {
 app.post('/api/sync', syncHandler);
 app.get('/api/files/:id', fileHandler);
 app.post('/api/ai', asyncRoute(aiHandler));
+app.post('/api/solve/photo', asyncRoute(solvePhotoHandler));
 
 app.post('/api/push/subscribe', (req, res) => {
   addSubscription(req.body?.subscription);

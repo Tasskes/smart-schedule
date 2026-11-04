@@ -452,3 +452,105 @@ a.btn { text-decoration: none; }
 .att-ocr { white-space: pre-wrap; background: var(--card-2); border-radius: 10px; padding: 8px; margin-top: 6px; font-size: 13px; }
 .att-viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.88); z-index: 120; display: flex; align-items: center; justify-content: center; padding: env(safe-area-inset-top) 8px env(safe-area-inset-bottom); }
 .att-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* ===== Оформление под iPhone: тише и проще ===== */
+:root { --shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
+
+/* Верхняя панель: кнопка «назад» слева, маленький заголовок по центру (появляется, когда крупный уехал), монеты справа */
+.topbar {
+  display: grid; grid-template-columns: minmax(70px, 1fr) auto minmax(70px, 1fr); align-items: center; gap: 6px;
+  padding: calc(env(safe-area-inset-top) + 6px) 12px 6px; min-height: calc(env(safe-area-inset-top) + 50px);
+  border-bottom: 0.5px solid transparent; transition: border-color 0.2s;
+}
+.scrolled .topbar { border-bottom-color: var(--line); }
+.tb-left { display: flex; align-items: center; min-width: 0; }
+.tb-right { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.topbar .back { font-size: 17px; gap: 0; padding: 6px 2px; margin-left: -6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-title { font-size: 17px; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 52vw; opacity: 0; transition: opacity 0.18s; }
+.nav-title.always, .scrolled .nav-title { opacity: 1; }
+.large-title { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; margin: 2px 4px 14px; }
+.coin-pill { padding: 4px 10px; font-size: 14px; box-shadow: none; }
+.seg.nav-seg { width: 200px; }
+.seg.nav-seg button { padding: 6px 8px; font-size: 14px; }
+
+/* Шапка дня: «Сегодня» крупно, под ним дата и неделя, справа круглые кнопки */
+.day-head { display: flex; align-items: flex-end; gap: 8px; margin: 6px 4px 12px; }
+.day-head .large-title { margin: 0; }
+.day-head .meta { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.round-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--accent-2); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.round-btn svg { width: 21px; height: 21px; }
+.round-btn.solid { background: var(--btn-bg, var(--accent)); color: var(--accent-text); }
+
+.weeknav { margin: 0 -6px; }
+.weeknav .title { font-size: 15px; }
+.daystrip { margin: 0 0 6px; }
+.daystrip .dn { width: 36px; height: 36px; font-size: 18px; }
+
+/* Лента дня: без плашек, одна строка подробностей, круглая галочка как в «Напоминаниях» */
+.timeline { gap: 6px; }
+.item { padding: 11px 12px 11px 0; box-shadow: none; gap: 12px; }
+.item .bar { width: 3px; }
+.item .time { width: 44px; font-size: 12px; padding-top: 2px; }
+.item .time b { font-size: 15px; }
+.item .title { font-size: 16px; }
+.item .sub { margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .sub .note { color: var(--warn); }
+.item .sub .run { color: var(--danger); font-weight: 600; }
+.item .acts { gap: 6px; }
+.item.thin { background: transparent; padding: 3px 12px 3px 0; }
+.item.thin .bar { opacity: 0.5; }
+.item.compact { background: var(--card); }
+.check { width: 30px; height: 30px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--muted) 45%, transparent); background: transparent; color: transparent; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0; transition: background 0.15s, border-color 0.15s; }
+.check svg { width: 17px; height: 17px; }
+.check.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+.free-gap { padding-left: 58px; }
+
+/* Списки в стиле настроек iPhone */
+.list { box-shadow: none; }
+.list-item { min-height: 50px; padding: 11px 14px; border-bottom-width: 0.5px; color: var(--text); }
+.li-title { font-size: 16px; font-weight: 500; }
+.li-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.list-item .value { color: var(--muted); font-size: 15px; white-space: nowrap; }
+.menu-ico { width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+.card { box-shadow: none; }
+.section-title { margin: 20px 6px 8px; }
+
+/* Чат: быстрые действия спрятаны за кнопкой ✨ */
+.composer .quick { width: 42px; height: 42px; border-radius: 50%; border: 0; background: var(--accent-2); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.composer .quick.active { background: var(--accent); color: var(--accent-text); }
+.suggest { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+.action-list .list-item .emoji { font-size: 20px; }
+
+/* «Решить» */
+.visually-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+.solve-hero { position: relative; display: flex; align-items: center; gap: 14px; background: var(--btn-bg, var(--accent)); color: var(--accent-text); border-radius: 20px; padding: 18px 16px; margin-bottom: 10px; cursor: pointer; }
+.solve-hero b { display: block; font-size: 18px; }
+.solve-hero small { display: block; opacity: 0.85; font-size: 13px; margin-top: 3px; }
+.solve-hero-icon { width: 54px; height: 54px; border-radius: 16px; background: rgba(255, 255, 255, 0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.solve-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; margin-bottom: 12px; }
+.solve-photos .attachments, .solve-photos .att-grid { display: contents; }
+.att-thumb.pending { position: relative; }
+.att-thumb.pending img { opacity: 0.45; }
+.att-thumb.pending span { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-size: 11px; font-weight: 600; }
+.att-add { position: relative; flex-direction: column; gap: 4px; color: var(--accent); background: var(--accent-2); font-size: 12px; font-weight: 600; cursor: pointer; }
+.answer { background: var(--card); border-radius: 16px; padding: 14px; font-size: 16px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.disclosure { width: 100%; display: flex; align-items: center; gap: 8px; border: 0; background: var(--card); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; font-size: 15px; color: var(--text); text-align: left; }
+.disclosure svg { color: var(--muted); }
+.solve-actions { margin: 4px 0 10px; gap: 6px; }
+.spacer { flex: 1; }
+.danger-text { color: var(--danger) !important; }
+.chips.wrap { flex-wrap: wrap; overflow: visible; }
+
+/* Мелкие пояснения прячем под «Подробнее» */
+details.hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+details.hint summary { cursor: pointer; color: var(--accent); list-style: none; }
+details.hint summary::-webkit-details-marker { display: none; }
+details.hint[open] summary { margin-bottom: 4px; }
+.warn-text { color: var(--warn); }
+details.fold summary { cursor: pointer; font-weight: 600; font-size: 15px; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.fold summary::after { content: '›'; color: var(--muted); font-size: 20px; line-height: 1; transition: transform 0.15s; }
+details.fold[open] summary::after { transform: rotate(90deg); }
+details.fold summary::-webkit-details-marker { display: none; }
+details.fold[open] summary { margin-bottom: 8px; }
+.day-head { align-items: center; margin-bottom: 2px; }
+.day-meta { font-size: 14px; color: var(--muted); margin: 0 4px 12px; }

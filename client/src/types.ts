@@ -192,6 +192,23 @@ export interface PriceRec extends Base {
   checkedAt?: number;
 }
 
+/** «Решить»: задание для нейросети — фото и/или текст, распознанный текст и переписка с решением */
+export interface SolveMsg {
+  role: 'user' | 'assistant';
+  text: string;
+  at: number;
+  error?: boolean;
+}
+
+export interface SolutionRec extends Base {
+  title: string;
+  question: string; // что сделать: «реши», «проверь моё решение»…
+  ocr: string; // текст с фото (можно поправить руками)
+  attachments: Attachment[];
+  messages: SolveMsg[];
+  createdAt: number;
+}
+
 export interface NoteRec extends Base {
   title?: string;
   text: string;

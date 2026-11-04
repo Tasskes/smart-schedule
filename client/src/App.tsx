@@ -18,6 +18,7 @@ import { LoginScreen } from './screens/LoginScreen';
 import { MoreScreen } from './screens/MoreScreen';
 import { RewardsScreen } from './screens/RewardsScreen';
 import { RoutinesScreen } from './screens/RoutinesScreen';
+import { SolveScreen } from './screens/SolveScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TasksScreen } from './screens/TasksScreen';
 import { TodayScreen } from './screens/TodayScreen';
@@ -25,15 +26,18 @@ import { VariablesScreen } from './screens/VariablesScreen';
 import { WeekScreen } from './screens/WeekScreen';
 import { syncStore } from './sync';
 
+// «План» — это и день, и неделя (переключатель вверху экрана)
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'today', label: 'Сегодня', icon: 'today' },
-  { id: 'week', label: 'Неделя', icon: 'week' },
-  { id: 'chat', label: 'ИИ-чат', icon: 'chat' },
+  { id: 'today', label: 'План', icon: 'week' },
+  { id: 'chat', label: 'Чат', icon: 'chat' },
+  { id: 'solve', label: 'Решить', icon: 'camera' },
   { id: 'food', label: 'Еда', icon: 'food' },
   { id: 'more', label: 'Ещё', icon: 'more' },
 ];
+const isPlan = (t: Tab) => t === 'today' || t === 'week';
+let lastPlanTab: Tab = 'today';
 
-const TITLES: Record<Tab, string> = { today: 'Сегодня', week: 'Неделя', chat: 'ИИ-планировщик', food: 'Питание', more: 'Ещё' };
+const TITLES: Record<Tab, string> = { today: 'Сегодня', week: 'Неделя', chat: 'ИИ-планировщик', solve: 'Решить', food: 'Питание', more: 'Ещё' };
 const SUB_TITLES: Record<Exclude<Sub, null>, string> = {
   goals: 'Цели',
   tasks: 'Задачи',
@@ -83,6 +87,8 @@ function SyncDot() {
   const net = netStore.use();
   const cls = !net.online || s.status === 'offline' ? 'off' : s.status === 'error' ? 'err' : s.status === 'syncing' ? 'busy' : s.status === 'local' ? 'off' : 'ok';
   const title = !net.online ? 'Нет интернета — всё сохраняется в телефоне' : s.status === 'error' ? s.error || 'Ошибка' : s.status === 'local' ? 'Без сервера' : 'Синхронизировано';
+  // когда всё хорошо, точку не показываем — меньше шума
+  if (cls === 'ok' || cls === 'busy') return null;
   return (
     <button className="icon-btn plain" style={{ width: 28 }} onClick={() => openSub('settings')} title={title} aria-label={title}>
       <span className={`status-dot ${cls}`} />
@@ -125,7 +131,18 @@ export function App() {
   if (!ready) return null;
   if (!token) return <LoginScreen />;
 
-  const title = nav.sub ? SUB_TITLES[nav.sub] : TITLES[nav.tab];
+  const solveOpen = nav.tab === 'solve' && !nav.sub && !!nav.solveId;
+  const title = nav.sub ? SUB_TITLES[nav.sub] : solveOpen ? 'Задание' : TITLES[nav.tab];
+  if (isPlan(nav.tab)) lastPlanTab = nav.tab;
+  // крупный заголовок в начале экрана (как в iOS); у плана, чата и открытого задания — только маленький сверху
+  const plan = isPlan(nav.tab) && !nav.sub;
+  const compactTitle = !nav.sub && (nav.tab === 'chat' || solveOpen);
+  const largeTitle = !plan && !compactTitle;
+  const back = nav.sub
+    ? { label: nav.tab === 'more' ? 'Ещё' : 'Назад', run: () => go(nav.tab) }
+    : solveOpen
+      ? { label: 'Задания', run: () => navStore.set({ solveId: null }) }
+      : null;
   let screen: React.ReactNode;
   if (nav.sub) {
     screen = {
@@ -144,6 +161,7 @@ export function App() {
       today: <TodayScreen />,
       week: <WeekScreen />,
       chat: <ChatScreen />,
+      solve: <SolveScreen />,
       food: <FoodScreen />,
       more: <MoreScreen />,
     }[nav.tab];
@@ -152,31 +170,57 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        {nav.sub ? (
-          <button className="back" onClick={() => go(nav.tab)} aria-label="Назад">
-            <Icon name="left" size={22} />
-          </button>
-        ) : null}
-        <h1>{title}</h1>
-        {!net.online ? <span className="badge">офлайн</span> : null}
-        <SyncDot />
-        <CoinPill />
+        <div className="tb-left">
+          {back ? (
+            <button className="back" onClick={back.run} aria-label="Назад">
+              <Icon name="left" size={24} />
+              {back.label}
+            </button>
+          ) : null}
+        </div>
+        {plan ? (
+          <div className="seg nav-seg" role="tablist">
+            <button className={nav.tab === 'today' ? 'active' : ''} onClick={() => go('today')}>
+              День
+            </button>
+            <button className={nav.tab === 'week' ? 'active' : ''} onClick={() => go('week')}>
+              Неделя
+            </button>
+          </div>
+        ) : (
+          <div className={`nav-title ${compactTitle ? 'always' : ''}`}>{title}</div>
+        )}
+        <div className="tb-right">
+          {!net.online ? <span className="badge">офлайн</span> : null}
+          <SyncDot />
+          <CoinPill />
+        </div>
       </header>
-      <main className={`content ${nav.tab === 'chat' && !nav.sub ? 'chat-main' : ''}`}>
-        <div className="content-inner">{screen}</div>
+      <main className={`content ${(nav.tab === 'chat' && !nav.sub) || solveOpen ? 'chat-main' : ''}`}>
+        <div className="content-inner">
+          {largeTitle ? <h1 className="large-title">{title}</h1> : null}
+          {screen}
+        </div>
       </main>
       <TimerChip />
       <nav className="tabbar">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={nav.tab === t.id && !nav.sub ? 'active' : nav.tab === t.id ? 'active' : ''}
-            onClick={() => go(t.id)}
-          >
-            <Icon name={t.icon} />
-            {t.label}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const active = t.id === 'today' ? isPlan(nav.tab) : nav.tab === t.id;
+          return (
+            <button
+              key={t.id}
+              className={active ? 'active' : ''}
+              onClick={() => {
+                if (t.id === 'today') return go(active && !nav.sub ? nav.tab : lastPlanTab);
+                if (t.id === 'solve' && active) navStore.set({ solveId: null }); // повторное нажатие — к списку заданий
+                go(t.id);
+              }}
+            >
+              <Icon name={t.icon} />
+              {t.label}
+            </button>
+          );
+        })}
       </nav>
       <Toasts />
     </div>

@@ -121,16 +121,6 @@ function ShoppingCard() {
         {st.daysLeft != null && fridge.length ? <span className="muted"> · еды ≈ на {String(st.daysLeft).replace('.', ',')} дн.</span> : null}
       </div>
       {st.missing.length && fridge.length ? <div className="tiny muted">Нет: {st.missing.join(', ')}</div> : null}
-      <div className="row wrap" style={{ gap: 4, marginTop: 8 }}>
-        {stores.map((s) => (
-          <span key={s} className="badge">
-            {s}
-          </span>
-        ))}
-        <button className="btn ghost small" style={{ minHeight: 0, padding: '2px 6px' }} onClick={() => openSub('basket')}>
-          изменить
-        </button>
-      </div>
 
       {plan ? (
         <div style={{ marginTop: 10 }}>
@@ -168,9 +158,15 @@ function ShoppingCard() {
       <button className="btn block" style={{ marginTop: 10 }} disabled={busy || !hasServer()} onClick={make}>
         <Icon name="sparkles" /> {busy ? 'Составляю список…' : plan ? 'Пересоставить список' : 'Что и где купить'}
       </button>
-      <div className="tiny muted" style={{ marginTop: 6 }}>
-        ИИ смотрит на холодильник, норму КБЖУ, цены и твоё расписание: подскажет, когда сходить и что в каком магазине брать. Если еды мало, поход в магазин сам появится в расписании.
-      </div>
+      <details className="hint">
+        <summary>Как это работает</summary>
+        ИИ смотрит на холодильник, норму КБЖУ, цены и твоё расписание: подскажет, когда сходить и что в каком магазине брать
+        ({stores.join(', ')} —{' '}
+        <button className="btn ghost small" style={{ minHeight: 0, padding: 0 }} onClick={() => openSub('basket')}>
+          изменить
+        </button>
+        ). Если еды мало, поход в магазин сам появится в расписании.
+      </details>
     </div>
   );
 }
@@ -373,6 +369,7 @@ export function FridgeScreen() {
   const [unit, setUnit] = useState('шт');
   const [expires, setExpires] = useState('');
   const [bulk, setBulk] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [use, setUse] = useState<FridgeRec | null>(null);
   const [wish, setWish] = useState('');
   const [busy, setBusy] = useState(false);
@@ -391,6 +388,7 @@ export function FridgeScreen() {
   const add = () => {
     if (!name.trim()) return;
     addToFridge({ name, amount, unit, expires: expires || null });
+    toast(`Добавил: ${name.trim()}`);
     setName('');
     setAmount(null);
     setExpires('');
@@ -411,7 +409,16 @@ export function FridgeScreen() {
     <>
       <ShoppingCard />
 
-      <div className="card">
+      <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+        <button className="btn secondary grow nowrap" onClick={() => setAdding(true)}>
+          <Icon name="plus" /> Добавить
+        </button>
+        <button className="btn secondary" onClick={() => setBulk(true)}>
+          ✨ Списком / чек
+        </button>
+      </div>
+      {adding ? (
+      <Sheet title="Добавить продукт" onClose={() => setAdding(false)}>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Продукт" onKeyDown={(e) => e.key === 'Enter' && add()} />
         <div className="grid-3" style={{ marginTop: 8 }}>
           <NumInput value={amount} onChange={setAmount} placeholder="Кол-во" />
@@ -423,15 +430,12 @@ export function FridgeScreen() {
           <input className="input" type="date" value={expires} onChange={(e) => setExpires(e.target.value)} title="Годен до (если пусто — оценю сам)" />
         </div>
         {name.trim() && !expires ? <div className="tiny muted" style={{ marginTop: 4 }}>Срок годности ≈ до {fmtShort(estimateExpiry(name, today))} (можно поменять)</div> : null}
-        <div className="grid-2" style={{ marginTop: 10 }}>
-          <button className="btn" onClick={add} disabled={!name.trim()}>
-            Добавить
-          </button>
-          <button className="btn secondary" onClick={() => setBulk(true)}>
-            ✨ Списком / чек
-          </button>
-        </div>
-      </div>
+        <button className="btn block" style={{ marginTop: 12 }} onClick={add} disabled={!name.trim()}>
+          Добавить
+        </button>
+        <div className="tiny muted center" style={{ marginTop: 8 }}>Можно добавлять подряд — окно не закроется</div>
+      </Sheet>
+      ) : null}
 
       {expired.length ? (
         <>

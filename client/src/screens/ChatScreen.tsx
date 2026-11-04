@@ -3,7 +3,7 @@ import { nextWeekDays, remainingWeekDays } from '../ai/context';
 import { flushPendingChat, retryAssistant, sendChat } from '../ai/chat';
 import { ActionCards } from '../components/ActionCards';
 import { Icon } from '../components/Icon';
-import { AutoTextarea, Empty, toast } from '../components/ui';
+import { AutoTextarea, Empty, Sheet, toast } from '../components/ui';
 import { hasServer, netStore } from '../api';
 import { all, get, remove, useTable } from '../db/store';
 import { addDays, fmtShort, todayStr, weekDays } from '../lib/dates';
@@ -35,7 +35,7 @@ function modeLabel(m: ModeState) {
 }
 
 const PLACEHOLDER: Record<ChatMode, string> = {
-  chat: 'Спроси или попроси что-нибудь…',
+  chat: 'Спроси что-нибудь…',
   plan: 'Пожелания (необязательно): «в среду много работы», «в пт хочу отдохнуть»…',
   tutor: 'Вставь сюда сообщение из ВК: «давай в четверг в 18:00»',
   review: 'Как прошёл день? (необязательно)',
@@ -83,6 +83,19 @@ export function ChatScreen() {
   };
 
   const week = weekDays(today).filter((d) => d >= today).concat(weekDays(addDays(today, 7)));
+  const [quick, setQuick] = useState(false);
+  const pick = (fn: () => void) => {
+    fn();
+    setQuick(false);
+  };
+  const QUICK: { emoji: string; title: string; run: () => void }[] = [
+    { emoji: '📅', title: 'План на остаток недели', run: () => setMode({ mode: 'plan', targetDays: remainingWeekDays() }) },
+    { emoji: '➡️', title: 'План на следующую неделю', run: () => setMode({ mode: 'plan', targetDays: nextWeekDays() }) },
+    { emoji: '📆', title: 'План на один день', run: () => setPickDay(true) },
+    { emoji: '👩‍🏫', title: 'Сообщение от репетитора', run: () => setMode({ mode: 'tutor' }) },
+    { emoji: '🏁', title: 'Итоги дня', run: () => setMode({ mode: 'review' }) },
+    { emoji: '🧮', title: 'Новая переменная', run: () => setText((t) => t || 'Добавь переменную: ') },
+  ];
 
   return (
     <div className="chat-screen">
@@ -102,7 +115,18 @@ export function ChatScreen() {
       <div className="chat">
         {!messages.length ? (
           <Empty emoji="🤖" title="Чат распорядка">
-            Попроси составить план недели, добавить задачу или переменную, разбить цель на шаги. Можно вставить сообщение репетитора — я сам добавлю занятие.
+            Попроси составить план, добавить задачу или переменную. Вставь сообщение репетитора — я сам добавлю занятие.
+            <div className="suggest">
+              <button className="chip" onClick={() => setMode({ mode: 'plan', targetDays: remainingWeekDays() })}>
+                📅 Остаток недели
+              </button>
+              <button className="chip" onClick={() => setMode({ mode: 'tutor' })}>
+                👩‍🏫 Репетитор
+              </button>
+              <button className="chip" onClick={() => setMode({ mode: 'review' })}>
+                🏁 Итоги дня
+              </button>
+            </div>
           </Empty>
         ) : null}
         {messages.map((m) => (
@@ -155,38 +179,10 @@ export function ChatScreen() {
             ))}
           </div>
         ) : null}
-        <div className="chips">
-          <button className="chip" onClick={() => setMode({ mode: 'plan', targetDays: remainingWeekDays() })}>
-            📅 Остаток недели
-          </button>
-          <button className="chip" onClick={() => setMode({ mode: 'plan', targetDays: nextWeekDays() })}>
-            ➡️ След. неделя
-          </button>
-          <button className={`chip ${pickDay ? 'active' : ''}`} onClick={() => setPickDay(!pickDay)}>
-            📆 Один день
-          </button>
-          <button className="chip" onClick={() => setMode({ mode: 'tutor' })}>
-            👩‍🏫 Репетитор
-          </button>
-          <button className="chip" onClick={() => setMode({ mode: 'review' })}>
-            🏁 Итоги дня
-          </button>
-          <button className="chip" onClick={() => setText((t) => t || 'Добавь переменную: ')}>
-            🧮 Переменная
-          </button>
-          {messages.length ? (
-            <button
-              className="chip"
-              onClick={() => {
-                if (!confirm('Очистить историю чата? Применённые изменения останутся.')) return;
-                for (const m of all('chat')) remove('chat', m.id);
-              }}
-            >
-              🗑 Очистить
-            </button>
-          ) : null}
-        </div>
         <div className="box">
+          <button className={`quick ${quick ? 'active' : ''}`} onClick={() => setQuick(true)} aria-label="Быстрые действия">
+            <Icon name="sparkles" />
+          </button>
           <AutoTextarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -205,6 +201,31 @@ export function ChatScreen() {
         </div>
         {!net.online ? <div className="tiny muted" style={{ marginTop: 6 }}>Нет интернета — сообщение уйдёт, когда связь появится.</div> : null}
       </div>
+      {quick ? (
+        <Sheet title="Быстрые действия" onClose={() => setQuick(false)}>
+          <div className="list action-list">
+            {QUICK.map((q) => (
+              <button key={q.title} className="list-item" onClick={() => pick(q.run)}>
+                <span className="emoji">{q.emoji}</span>
+                <span className="grow li-title">{q.title}</span>
+              </button>
+            ))}
+          </div>
+          {messages.length ? (
+            <button
+              className="btn danger block"
+              onClick={() =>
+                pick(() => {
+                  if (!confirm('Очистить историю чата? Применённые изменения останутся.')) return;
+                  for (const m of all('chat')) remove('chat', m.id);
+                })
+              }
+            >
+              Очистить чат
+            </button>
+          ) : null}
+        </Sheet>
+      ) : null}
     </div>
   );
 }

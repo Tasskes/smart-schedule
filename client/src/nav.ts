@@ -3,7 +3,7 @@ import { todayStr } from './lib/dates';
 import { quietScroll, setBarHidden } from './tabbar';
 import type { ChatMode } from './types';
 
-export type Tab = 'today' | 'week' | 'chat' | 'food' | 'more';
+export type Tab = 'today' | 'week' | 'chat' | 'solve' | 'food' | 'more';
 export type Sub = null | 'goals' | 'tasks' | 'variables' | 'routines' | 'rewards' | 'fridge' | 'basket' | 'settings' | 'notes';
 
 export interface ChatIntent {
@@ -14,11 +14,12 @@ export interface ChatIntent {
   autoSend?: boolean;
 }
 
-export const navStore = createStore<{ tab: Tab; sub: Sub; date: string; chatIntent: ChatIntent | null }>({
+export const navStore = createStore<{ tab: Tab; sub: Sub; date: string; chatIntent: ChatIntent | null; solveId: string | null }>({
   tab: 'today',
   sub: null,
   date: todayStr(),
   chatIntent: null,
+  solveId: null, // открытое задание на вкладке «Решить»
 });
 
 /** Прокрутка средней части экрана (сама страница не прокручивается) */

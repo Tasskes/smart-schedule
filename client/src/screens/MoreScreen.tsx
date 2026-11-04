@@ -3,38 +3,62 @@ import { useTable } from '../db/store';
 import { balance } from '../lib/game';
 import { openSub, type Sub } from '../nav';
 
-const ITEMS: { sub: Sub; emoji: string; title: string; hint: string }[] = [
-  { sub: 'goals', emoji: '🎯', title: 'Цели', hint: '5 лет → год → полгода → квартал → месяц → неделя' },
-  { sub: 'tasks', emoji: '✅', title: 'Задачи', hint: 'Оценка объёма и времени ИИ, дедлайны' },
-  { sub: 'notes', emoji: '📥', title: 'Заметки и входящие', hint: 'Мысли, идеи и всё, что пришло боту в ВК или Telegram' },
-  { sub: 'variables', emoji: '🧮', title: 'Переменные', hint: 'Постоянные значения и формулы для распорядка' },
-  { sub: 'routines', emoji: '🔁', title: 'Распорядок', hint: 'Подъём, дорога, отбой — то, что повторяется' },
-  { sub: 'rewards', emoji: '🪙', title: 'Монеты и награды', hint: 'Баланс, уровень, магазин наград' },
-  { sub: 'fridge', emoji: '🧊', title: 'Холодильник и рецепты', hint: 'Что есть дома и что из этого приготовить' },
-  { sub: 'basket', emoji: '🛒', title: 'Продуктовая корзина', hint: 'Самая выгодная корзина под твоё КБЖУ' },
-  { sub: 'settings', emoji: '⚙️', title: 'Настройки', hint: 'Сервер, уведомления, календарь, резервная копия' },
+// Как в настройках iPhone: группы, цветной значок, одна строка на пункт, справа — число или баланс
+const GROUPS: { title: string; items: { sub: Exclude<Sub, null>; emoji: string; title: string; color: string }[] }[] = [
+  {
+    title: 'Планирование',
+    items: [
+      { sub: 'tasks', emoji: '✅', title: 'Задачи', color: '#34c759' },
+      { sub: 'goals', emoji: '🎯', title: 'Цели', color: '#ff3b30' },
+      { sub: 'routines', emoji: '🔁', title: 'Распорядок', color: '#5856d6' },
+      { sub: 'variables', emoji: '🧮', title: 'Переменные', color: '#8e8e93' },
+    ],
+  },
+  {
+    title: 'Еда и дом',
+    items: [
+      { sub: 'fridge', emoji: '🧊', title: 'Холодильник и рецепты', color: '#32ade6' },
+      { sub: 'basket', emoji: '🛒', title: 'Продуктовая корзина', color: '#ff9500' },
+    ],
+  },
+  {
+    title: 'Прочее',
+    items: [
+      { sub: 'notes', emoji: '📥', title: 'Заметки и входящие', color: '#007aff' },
+      { sub: 'rewards', emoji: '🪙', title: 'Монеты и награды', color: '#ffcc00' },
+      { sub: 'settings', emoji: '⚙️', title: 'Настройки', color: '#8e8e93' },
+    ],
+  },
 ];
 
 export function MoreScreen() {
   const ledger = useTable('ledger');
   const notes = useTable('notes');
-  const fresh = notes.filter((n) => !n.done).length;
+  const tasks = useTable('tasks');
+  const value: Partial<Record<Exclude<Sub, null>, string | number>> = {
+    tasks: tasks.filter((t) => t.status === 'todo').length || '',
+    notes: notes.filter((n) => !n.done).length || '',
+    rewards: `🪙 ${balance(ledger)}`,
+  };
   return (
-    <div className="list">
-      {ITEMS.map((it) => (
-        <button key={it.sub} className="list-item" onClick={() => openSub(it.sub)}>
-          <span className="emoji">{it.emoji}</span>
-          <div className="grow">
-            <div style={{ fontWeight: 600 }}>
-              {it.title}
-              {it.sub === 'rewards' ? <span className="badge coin" style={{ marginLeft: 6 }}>🪙 {balance(ledger)}</span> : null}
-              {it.sub === 'notes' && fresh ? <span className="badge accent" style={{ marginLeft: 6 }}>{fresh}</span> : null}
-            </div>
-            <div className="tiny muted">{it.hint}</div>
+    <>
+      {GROUPS.map((g) => (
+        <div key={g.title}>
+          <div className="section-title">{g.title}</div>
+          <div className="list">
+            {g.items.map((it) => (
+              <button key={it.sub} className="list-item" onClick={() => openSub(it.sub)}>
+                <span className="menu-ico" style={{ background: `color-mix(in srgb, ${it.color} 20%, var(--card))` }}>
+                  {it.emoji}
+                </span>
+                <span className="grow li-title">{it.title}</span>
+                {value[it.sub] ? <span className="value">{value[it.sub]}</span> : null}
+                <Icon name="right" className="chev" />
+              </button>
+            ))}
           </div>
-          <Icon name="right" className="chev" />
-        </button>
+        </div>
       ))}
-    </div>
+    </>
   );
 }

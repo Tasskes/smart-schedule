@@ -264,14 +264,14 @@ export function TasksScreen() {
   const workBadge = (t: TaskRec) => {
     const st = workWeekState(t.id, events, weekStart(today), today);
     if (st.done) return { cls: 'ok', text: '💼 час на неделе сделан' };
-    if (st.planned) return { cls: 'accent', text: `💼 1 ч в неделю · ${fmtShort(st.planned.date)} ${st.planned.start}` };
-    return { cls: 'warn', text: '💼 1 ч в неделю · не стоит' };
+    if (st.planned) return { cls: 'accent', text: `💼 ${fmtShort(st.planned.date)} ${st.planned.start}` };
+    return { cls: 'warn', text: '💼 час не стоит' };
   };
 
   return (
     <>
       <div className="row" style={{ marginBottom: 10 }}>
-        <button className="btn grow" onClick={() => setEdit({ category: 'study' })}>
+        <button className="btn secondary grow" onClick={() => setEdit({ category: 'study' })}>
           <Icon name="plus" /> Новая задача
         </button>
       </div>
@@ -314,38 +314,39 @@ export function TasksScreen() {
             <button key={t.id} className="list-item" onClick={() => setEdit(t)}>
               <span className="emoji">{CATEGORIES[t.category]?.emoji}</span>
               <div className="grow">
-                <div className="small" style={{ fontWeight: 600 }}>
+                <div className="li-title">
+                  {t.status === 'todo' && loads.get(t.id)?.priority === 1 ? '🔥 ' : ''}
                   {t.title}
                 </div>
-                <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>
-                  {t.status === 'todo' && loads.get(t.id) ? (
-                    <span className={`badge ${loads.get(t.id)!.priority === 1 ? 'danger' : loads.get(t.id)!.priority === 2 ? 'warn' : ''}`}>
-                      {loads.get(t.id)!.priority === 1 ? '🔥 ' : ''}
-                      {PRIORITY_LABEL[loads.get(t.id)!.priority].toLowerCase()}
-                      {loads.get(t.id)!.manual ? ' ✋' : ''}
-                    </span>
-                  ) : null}
-                  {t.status === 'todo' && isWorkTask(t, goalById) ? <span className={`badge ${workBadge(t).cls}`}>{workBadge(t).text}</span> : null}
-                  {adj ? <span className="badge">⏱ {fmtDur(adj)}</span> : <span className="badge warn">без оценки</span>}
-                  {spent ? <span className="badge ok">сделано {fmtDur(spent)}</span> : null}
-                  {t.reward ? <span className="badge coin">🪙 {t.reward}</span> : null}
-                  {t.deadline ? (
-                    <span className={`badge ${left! < 0 ? 'danger' : left! <= 2 ? 'warn' : ''}`}>
-                      {left! < 0 ? 'просрочено' : left === 0 ? 'сегодня' : `до ${fmtShort(t.deadline)}`}
-                    </span>
-                  ) : null}
-                  {goal ? <span className="badge accent">🎯 {goal.title.slice(0, 24)}</span> : null}
-                  {t.source === 'telegram' ? <span className="badge">📨 из бота</span> : null}
-                  {t.attachments?.length ? <span className="badge">📎 {t.attachments.length}</span> : null}
+                <div className="li-sub">
+                  {[
+                    t.deadline ? (
+                      <span key="d" className={left! < 0 ? 'err-text' : left! <= 2 ? 'warn-text' : ''}>
+                        {left! < 0 ? 'просрочено' : left === 0 ? 'сегодня' : `до ${fmtShort(t.deadline)}`}
+                      </span>
+                    ) : null,
+                    t.status === 'todo' && isWorkTask(t, goalById) ? <span key="w" className={workBadge(t).cls === 'warn' ? 'warn-text' : ''}>{workBadge(t).text}</span> : null,
+                    adj ? <span key="e">⏱ {fmtDur(adj)}{spent ? `, сделано ${fmtDur(spent)}` : ''}</span> : t.status === 'todo' ? <span key="e">без оценки</span> : null,
+                    goal ? <span key="g">🎯 {goal.title.slice(0, 22)}</span> : null,
+                    t.attachments?.length ? <span key="a">📎 {t.attachments.length}</span> : null,
+                  ]
+                    .filter(Boolean)
+                    .map((part, i) => (
+                      <span key={i}>
+                        {i ? ' · ' : ''}
+                        {part}
+                      </span>
+                    ))}
                 </div>
               </div>
+              <Icon name="right" className="chev" />
             </button>
           );
         })}
       </div>
 
-      <div className="section-title">Точность оценок</div>
-      <div className="card small">
+      <details className="card small fold" style={{ marginTop: 16 }}>
+        <summary>Точность оценок</summary>
         {Object.keys(factors).length ? (
           Object.entries(factors).map(([k, f]) => (
             <div key={k} className="row between" style={{ padding: '3px 0' }}>
@@ -357,10 +358,10 @@ export function TasksScreen() {
           ))
         ) : (
           <span className="muted">
-            Когда выполнишь хотя бы 3 задачи с оценкой (засекай время таймером ▶), приложение поймёт, во сколько раз ты обычно выходишь за оценку, и будет поправлять оценки ИИ под тебя.
+            Когда выполнишь хотя бы 3 задачи с оценкой (засекай время таймером), приложение поймёт, во сколько раз ты обычно выходишь за оценку, и будет поправлять оценки ИИ под тебя.
           </span>
         )}
-      </div>
+      </details>
       {edit ? <TaskSheet initial={edit} load={edit.id ? loads.get(edit.id) : undefined} onClose={() => setEdit(null)} /> : null}
     </>
   );

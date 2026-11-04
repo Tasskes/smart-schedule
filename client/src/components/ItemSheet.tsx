@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { overrideTime, resetOverride, setHidden, setItemStatus } from '../db/ops';
+import { overrideTime, resetOverride, setHidden, setItemStatus, startTimer, stopTimer } from '../db/ops';
 import { get, patch, put, useTable } from '../db/store';
 import { fmtDur, fmtShort, minToTime, normTime, nowMin, roundUp5, timeToMin, todayStr } from '../lib/dates';
 import { defaultReward } from '../lib/game';
@@ -18,8 +18,33 @@ export function ItemSheet({ item, onClose }: { item: DayItem; onClose: () => voi
   return <VirtualSheet item={item} onClose={onClose} />;
 }
 
+function TimerButton({ item, onClose }: { item: DayItem; onClose: () => void }) {
+  const minutes = (timeToMin(item.end) ?? 0) - (timeToMin(item.start) ?? 0);
+  if (item.kind === 'class' || item.status === 'done' || minutes < 10) return null;
+  const running = !!item.startedAt;
+  return (
+    <button
+      className={`btn block ${running ? 'danger' : 'secondary'}`}
+      style={{ marginBottom: 12 }}
+      onClick={() => {
+        if (running) {
+          const r = stopTimer(item);
+          afterDone(item, r.coins, r.minutes);
+        } else {
+          startTimer(item);
+          toast(`Таймер запущен: ${item.title}`);
+        }
+        onClose();
+      }}
+    >
+      {running ? '■ Остановить таймер' : '▶ Засечь время'}
+    </button>
+  );
+}
+
 function StatusButtons({ item, onClose }: { item: DayItem; onClose: () => void }) {
   return (
+    <>
     <div className="grid-2" style={{ marginBottom: 12 }}>
       <button
         className={`btn ${item.status === 'done' ? 'secondary' : 'ok'}`}
@@ -41,6 +66,8 @@ function StatusButtons({ item, onClose }: { item: DayItem; onClose: () => void }
         {item.status === 'skipped' ? 'Вернуть' : 'Пропустить'}
       </button>
     </div>
+    <TimerButton item={item} onClose={onClose} />
+    </>
   );
 }
 

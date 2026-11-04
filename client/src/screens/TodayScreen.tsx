@@ -8,7 +8,7 @@ import { metaGet, metaSet } from '../db/idb';
 import { usePlanner } from '../db/planState';
 import { refreshSchedule, semesterStart, useSchedule } from '../db/schedule';
 import { get, useTable } from '../db/store';
-import { academicWeek, fmtDur, fmtLong, nowMin, timeToMin, todayStr } from '../lib/dates';
+import { academicWeek, addDays, fmtDayMonth, fmtDur, fmtLong, nowMin, timeToMin, todayStr } from '../lib/dates';
 import { calcNorms, latestWeight, sumMacros } from '../lib/nutrition';
 import { totalFree } from '../lib/planner';
 import { go, navStore, openChat, setDate } from '../nav';
@@ -95,7 +95,13 @@ export function TodayScreen() {
   const isToday = date === today;
   const isPast = date < today;
   const doneCount = items.filter((i) => i.status === 'done').length;
-  const coinsPlanned = items.reduce((s, i) => s + (i.status !== 'skipped' ? i.reward : 0), 0);
+  const weekday = fmtLong(date).split(',')[0];
+  const relative = isToday ? 'Сегодня' : date === addDays(today, 1) ? 'Завтра' : date === addDays(today, -1) ? 'Вчера' : null;
+  const meta = [
+    relative ? `${weekday.toLowerCase()}, ${fmtDayMonth(date)}` : fmtDayMonth(date),
+    week ? `${week.num}-я неделя, ${week.even ? 'чётная' : 'нечётная'}` : null,
+    items.length ? `сделано ${doneCount}/${items.length}` : null,
+  ].filter(Boolean).join(' · ');
 
   const rows: React.ReactNode[] = [];
   let nowShown = !isToday;
@@ -125,16 +131,22 @@ export function TodayScreen() {
   return (
     <>
       <DayStrip date={date} onChange={setDate} />
-      <div className="row between" style={{ margin: '2px 4px 10px' }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 18 }}>{fmtLong(date)}</div>
-          <div className="small muted">
-            {week ? `${week.num}-я неделя, ${week.even ? 'чётная' : 'нечётная'}` : 'Учебная неделя —'}
-            {items.length ? ` · сделано ${doneCount}/${items.length}` : ''}
-            {coinsPlanned ? ` · до 🪙${coinsPlanned}` : ''}
-          </div>
-        </div>
-        {sched.loading ? <span className="small muted">обновляю…</span> : null}
+      <div className="day-head">
+        <h1 className="large-title grow">{relative || weekday}</h1>
+        {!isPast ? (
+          <>
+            <button className="btn small" onClick={() => openChat({ mode: 'plan', targetDays: [date] })} aria-label={hasAi ? 'Перегенерировать день' : 'Спланировать день с ИИ'}>
+              <Icon name={hasAi ? 'refresh' : 'sparkles'} /> ИИ-план
+            </button>
+            <button className="round-btn" onClick={() => setAdding(true)} aria-label="Добавить дело">
+              <Icon name="plus" />
+            </button>
+          </>
+        ) : null}
+      </div>
+      <div className="day-meta">
+        {meta}
+        {sched.loading ? ' · обновляю…' : ''}
       </div>
 
       {isToday ? <ChangesBanner /> : null}
@@ -152,23 +164,12 @@ export function TodayScreen() {
         </div>
       ) : null}
 
-      {!isPast ? (
-        <div className="row" style={{ marginBottom: 12 }}>
-          <button className="btn grow" onClick={() => openChat({ mode: 'plan', targetDays: [date] })}>
-            <Icon name={hasAi ? 'refresh' : 'sparkles'} />
-            {hasAi ? 'Перегенерировать день' : 'Спланировать день с ИИ'}
-          </button>
-          <button className="btn secondary" onClick={() => setAdding(true)} aria-label="Добавить дело">
-            <Icon name="plus" />
-          </button>
-        </div>
-      ) : null}
 
       {items.length ? (
         <div className="timeline">{rows}</div>
       ) : (
         <Empty emoji="🌤️" title="На этот день пока пусто">
-          Пар нет. Нажми «Спланировать день с ИИ» или добавь дело вручную.
+          Пар нет. Нажми «ИИ-план» — нейросеть разложит дела, или добавь дело вручную «+».
         </Empty>
       )}
 

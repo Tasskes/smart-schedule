@@ -56,33 +56,30 @@ export function WeekScreen() {
       </div>
 
       {target.length ? (
-        <div className="card">
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ fontWeight: 600 }}>✨ Распорядок с ИИ</div>
+        <div className="card row" style={{ gap: 8 }}>
+          <div className="grow">
+            <div style={{ fontWeight: 600 }}>✨ ИИ-план</div>
             <div className="small muted">
-              дел от ИИ: {stats.ai} · сделано {stats.done} из {stats.total} · заработано 🪙{stats.coins}
+              сделано {stats.done} из {stats.total}
+              {stats.coins ? ` · 🪙 ${stats.coins}` : ''}
             </div>
           </div>
-          <div className="stack">
-            <button className="btn" onClick={() => openChat({ mode: 'plan', targetDays: target })}>
-              <Icon name={stats.ai ? 'refresh' : 'sparkles'} />
-              {stats.ai
-                ? isCurrent
-                  ? 'Перегенерировать оставшиеся дни'
-                  : 'Перегенерировать неделю'
-                : isCurrent
-                  ? 'Сгенерировать на оставшиеся дни'
-                  : 'Сгенерировать неделю'}
+          <button
+            className="btn small"
+            onClick={() => openChat({ mode: 'plan', targetDays: target })}
+            aria-label={
+              stats.ai
+                ? isCurrent ? 'Перегенерировать оставшиеся дни' : 'Перегенерировать неделю'
+                : isCurrent ? 'Сгенерировать на оставшиеся дни' : 'Сгенерировать неделю'
+            }
+          >
+            <Icon name={stats.ai ? 'refresh' : 'sparkles'} /> {isCurrent ? 'Остаток' : 'Неделя'}
+          </button>
+          {isCurrent ? (
+            <button className="btn small secondary" onClick={() => openChat({ mode: 'plan', targetDays: weekDays(addDays(today, 7)) })} aria-label="Спланировать следующую неделю">
+              След.
             </button>
-            {isCurrent ? (
-              <button className="btn secondary" onClick={() => openChat({ mode: 'plan', targetDays: weekDays(addDays(today, 7)) })}>
-                Спланировать следующую неделю
-              </button>
-            ) : null}
-            <div className="tiny muted">
-              Твои дела, пары, репетитор и отмеченное не трогаются — меняются только дела от ИИ. Перед генерацией можно написать пожелания.
-            </div>
-          </div>
+          ) : null}
         </div>
       ) : null}
 

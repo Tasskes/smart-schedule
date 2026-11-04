@@ -183,7 +183,7 @@ export function GoalsScreen() {
   return (
     <>
       <div className="row" style={{ marginBottom: 10 }}>
-        <button className="btn grow" onClick={() => setEdit({ horizon: '1m' })}>
+        <button className="btn secondary grow" onClick={() => setEdit({ horizon: '1m' })}>
           <Icon name="plus" /> Новая цель
         </button>
         <button className={`chip ${showDone ? 'active' : ''}`} onClick={() => setShowDone(!showDone)}>
@@ -200,9 +200,10 @@ export function GoalsScreen() {
               <Icon name="sparkles" /> {busy ? 'Считаю…' : 'Рассчитать'}
             </button>
           </div>
-          <div className="tiny muted" style={{ marginTop: 6 }}>
+          <details className="hint">
+            <summary>Как это считается</summary>
             ИИ смотрит на прогресс, сложность задач и твою загруженность и решает, сколько часов в неделю нужно каждой цели. Это время само ставится в расписание (кроме постоянных целей).
-          </div>
+          </details>
         </div>
       ) : null}
       {!visible.length ? <Empty emoji="🎯" title={showDone ? 'Пока нет достигнутых' : 'Целей нет'}>Добавь цель — ИИ разобьёт её на шаги и встроит в распорядок.</Empty> : null}
@@ -230,9 +231,8 @@ export function GoalsScreen() {
                   </div>
                   {parent ? <div className="tiny muted">↳ {parent.title}</div> : null}
                   {g.context ? (
-                    <div className="small muted" style={{ marginTop: 4 }}>
-                      {g.context.slice(0, 140)}
-                      {g.context.length > 140 ? '…' : ''}
+                    <div className="small muted ellipsis" style={{ marginTop: 3 }}>
+                      {g.context}
                     </div>
                   ) : null}
                   {isOngoing(g) ? (
@@ -246,15 +246,15 @@ export function GoalsScreen() {
                           <Progress value={(g.progress || 0) / 100} tone={g.status === 'done' ? 'ok' : undefined} />
                         </div>
                         <span className="tiny muted nowrap">
-                          {g.progress || 0}% · подцелей {children} · задач {openTasks}
+                          {[`${g.progress || 0}%`, children ? `подцелей ${children}` : '', openTasks ? `задач ${openTasks}` : ''].filter(Boolean).join(' · ')}
                         </span>
+                        {g.status === 'active' ? (
+                          <span className="badge accent">
+                            ⏱ {fmtWeekly(weekly)}
+                            {g.weeklyManual ? ' ✋' : ''}
+                          </span>
+                        ) : null}
                       </div>
-                      {g.status === 'active' ? (
-                        <div className="row wrap" style={{ gap: 4, marginTop: 6 }}>
-                          <span className="badge accent">⏱ {fmtWeekly(weekly)}</span>
-                          {g.weeklyManual ? <span className="badge">✋ вручную</span> : g.budgetAt ? <span className="badge">✨ расчёт ИИ</span> : <span className="badge">примерно</span>}
-                        </div>
-                      ) : null}
                     </>
                   )}
                 </button>

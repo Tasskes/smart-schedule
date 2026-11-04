@@ -39,6 +39,8 @@ export function handleMainScroll(el: HTMLElement) {
   const y = Math.min(Math.max(el.scrollTop, 0), max); // «резинку» iOS у краёв не считаем
   const dy = y - lastY;
   lastY = y;
+  // крупный заголовок уехал вверх — показываем маленький в верхней панели
+  document.documentElement.classList.toggle('scrolled', y > 34);
   if (document.documentElement.classList.contains('kb-open')) {
     path = 0;
     return;

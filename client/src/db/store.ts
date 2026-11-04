@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type {
   Base, ChatRec, EventRec, FoodRec, FridgeRec, GoalRec, LedgerRec, MarkRec, NoteRec, PriceRec, ProductRec,
-  RewardRec, RoutineRec, SettingsRec, TaskRec, VariableRec, WeightRec,
+  RewardRec, RoutineRec, SettingsRec, SolutionRec, TaskRec, VariableRec, WeightRec,
 } from '../types';
 import { idbGetAll, idbPutMany, TABLES, type TableName } from './idb';
 
@@ -22,6 +22,7 @@ export interface TableTypes {
   settings: SettingsRec;
   prices: PriceRec;
   notes: NoteRec;
+  solutions: SolutionRec;
 }
 
 type Rec = Base & Record<string, unknown>;

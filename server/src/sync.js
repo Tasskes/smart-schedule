@@ -13,7 +13,7 @@ if (!serverId) {
 // конфликты решаются по updatedAt (последняя правка побеждает).
 export const SYNC_TABLES = new Set([
   'events', 'tasks', 'goals', 'variables', 'routines', 'marks', 'food', 'products',
-  'weights', 'fridge', 'rewards', 'ledger', 'chat', 'settings', 'prices', 'notes',
+  'weights', 'fridge', 'rewards', 'ledger', 'chat', 'settings', 'prices', 'notes', 'solutions',
 ]);
 
 const selectSince = db.prepare(

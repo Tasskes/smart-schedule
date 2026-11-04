@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react';
 import { completeTask, setItemStatus, startTimer, stopTimer } from '../db/ops';
 import { get } from '../db/store';
 import { fmtDur, timeToMin } from '../lib/dates';
@@ -62,6 +63,19 @@ export function ItemRow({ item, now, onOpen, compact }: { item: DayItem; now?: n
     }
   };
 
+  // одна тихая строка подробностей вместо плашек: аудитория, таймер, перенос, «авто»
+  const sub: ReactNode[] = [];
+  if (!thin) {
+    const info = [item.subtitle, item.location].filter(Boolean).join(' · ');
+    if (info) sub.push(info);
+    if (running) sub.push(<span className="run">⏱ идёт</span>);
+    if (item.actualMin) sub.push(fmtDur(item.actualMin));
+    if (item.notes?.startsWith('↪️')) sub.push(<span className="note">{item.notes}</span>);
+    else if (item.status === 'skipped') sub.push('пропущено');
+    if (item.source === 'auto' && !compact) sub.push('авто');
+  }
+  const canTimer = !compact && !done && item.kind !== 'class' && duration >= 10;
+
   return (
     <div className={cls} onClick={() => onOpen?.(item)} role="button" tabIndex={0}>
       <div className="bar" style={{ background: kindColor(item.kind) }} />
@@ -75,33 +89,23 @@ export function ItemRow({ item, now, onOpen, compact }: { item: DayItem; now?: n
           {item.title}
           {thin && duration > 0 ? <span className="muted"> · {fmtDur(duration)}</span> : null}
         </div>
-        {!thin && (item.subtitle || item.location) ? (
-          <div className="sub ellipsis">{[item.subtitle, item.location].filter(Boolean).join(' · ')}</div>
-        ) : null}
-        {!thin && !compact ? (
-          <div className="meta">
-            <span className="badge">
-              {KINDS[item.kind]?.emoji} {KINDS[item.kind]?.label}
-            </span>
-            {item.reward > 0 ? <span className="badge coin">🪙 {item.reward}</span> : null}
-            {item.fixed && item.kind !== 'class' ? <span className="badge">📌 жёстко</span> : null}
-            {item.source === 'auto' ? <span className="badge accent">🤖 авто</span> : null}
-            {running ? <span className="badge danger">⏱ идёт</span> : null}
-            {item.actualMin ? <span className="badge ok">{fmtDur(item.actualMin)}</span> : null}
-            {item.notes?.startsWith('↪️') ? (
-              <span className="badge warn">{item.notes}</span>
-            ) : item.status === 'skipped' ? (
-              <span className="badge">пропущено</span>
-            ) : null}
+        {sub.length ? (
+          <div className="sub">
+            {sub.map((part, i) => (
+              <Fragment key={i}>
+                {i ? ' · ' : ''}
+                {part}
+              </Fragment>
+            ))}
           </div>
         ) : null}
       </div>
       {!thin ? (
         <div className="acts">
-          <button className={`icon-btn ${done ? 'ok' : ''}`} onClick={toggleDone} aria-label="Готово">
+          <button className={`check ${done ? 'on' : ''}`} onClick={toggleDone} aria-label="Готово">
             <Icon name="check" />
           </button>
-          {!compact && !done && item.kind !== 'class' && duration >= 10 ? (
+          {canTimer && (isNow || running) ? (
             <button className={`icon-btn ${running ? 'accent' : 'plain'}`} onClick={timer} aria-label="Таймер">
               <Icon name={running ? 'stop' : 'play'} />
             </button>

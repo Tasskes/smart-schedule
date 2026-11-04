@@ -65,6 +65,14 @@ export async function mockComplete({ messages }) {
   const mode = data.mode || 'chat';
   let out;
 
+  if (mode === 'solve') {
+    // решатель отвечает обычным текстом, не JSON
+    const text = messages.length > 1
+      ? `Тестовый ответ на уточнение: «${userText.trim().slice(0, 80)}».\nПроверка: 2·2 + 3 = 7 — верно.`
+      : 'Решение (тестовый режим):\n1) Переносим 3 вправо: 2x = 7 − 3 = 4.\n2) Делим на 2: x = 4 / 2 = 2.\nОтвет: x = 2.';
+    return { text, usage: { input: Math.round(last.length / 4), output: 60 } };
+  }
+
   switch (mode) {
     case 'plan': {
       const days = planFor(data);

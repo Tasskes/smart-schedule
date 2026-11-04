@@ -99,7 +99,9 @@ function VkCard() {
     return (
       <div className="card small">
         <div>
-          Бот ВКонтакте работает через твоё сообщество (можно закрытое, только для себя). Настройка ~5 минут:
+          Бот ещё не подключён. Он работает через твоё сообщество ВКонтакте (можно закрытое, только для себя).
+          <details className="hint">
+          <summary>Как подключить (~5 минут)</summary>
           <ol style={{ margin: '8px 0', paddingLeft: 18 }}>
             <li>ВКонтакте → Сообщества → <b>Создать сообщество</b> (тип любой, например «Группа по интересам»).</li>
             <li>
@@ -116,6 +118,7 @@ function VkCard() {
               сообщества или из «Работа с API»), затем <span className="kbd">docker compose up -d</span>.
             </li>
           </ol>
+          </details>
         </div>
         <button className="btn small secondary" onClick={load}>
           Проверить снова
@@ -200,7 +203,9 @@ function TelegramCard() {
     return (
       <div className="card small">
         <div>
-          Бот ещё не создан. Это займёт 2 минуты:
+          Бот ещё не создан.
+          <details className="hint">
+          <summary>Как создать (2 минуты)</summary>
           <ol style={{ margin: '8px 0', paddingLeft: 18 }}>
             <li>
               В Telegram открой <b>@BotFather</b> → <span className="kbd">/newbot</span> → придумай имя и логин бота (должен заканчиваться на <i>bot</i>).
@@ -212,6 +217,7 @@ function TelegramCard() {
             </li>
           </ol>
           Потом вернись сюда и нажми «Подключить».
+          </details>
         </div>
         <button className="btn small secondary" onClick={load}>
           Проверить снова

@@ -32,23 +32,15 @@ function isTextEntry(el: Element | null) {
 function setupViewport() {
   const root = document.documentElement;
   const vv = window.visualViewport;
-  // на телефоне фокус в поле ввода = открыта клавиатура; на компьютере панель не прячем
+  // на телефоне фокус в поле ввода = открыта клавиатура; на компьютере панель не прячем.
+  // По высоте экрана клавиатуру не угадываем: после поворота или смены размера окна это давало ложные срабатывания.
   const touch = window.matchMedia?.('(pointer: coarse)').matches ?? false;
-  let baseW = 0;
-  let baseH = 0; // высота экрана без клавиатуры (максимум при текущей ширине)
   let keyboard = false;
   const apply = () => {
     const h = vv ? vv.height : window.innerHeight;
     root.style.setProperty('--vv-h', `${Math.round(h)}px`);
     root.style.setProperty('--vv-top', `${Math.round(vv ? vv.offsetTop : 0)}px`);
-    if (window.innerWidth !== baseW) {
-      baseW = window.innerWidth; // повернули экран — меряем заново
-      baseH = 0;
-    }
-    const scale = vv?.scale || 1;
-    if (scale < 1.05) baseH = Math.max(baseH, h, window.innerHeight);
-    const shrunk = touch && scale < 1.05 && baseH - h > 120;
-    const next = shrunk || (touch && isTextEntry(document.activeElement));
+    const next = touch && isTextEntry(document.activeElement);
     if (next === keyboard) return;
     keyboard = next;
     root.classList.toggle('kb-open', next);

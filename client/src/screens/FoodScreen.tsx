@@ -494,22 +494,16 @@ function NormsSheet({ onClose }: { onClose: () => void }) {
 
 // ---------- Вес ----------
 
+/** График веса — вносится кнопкой «⚖️» вверху экрана */
 function WeightCard() {
   const weights = useTable('weights');
   const settings = useRecord('settings', 'main');
-  const [val, setVal] = useState<number | null>(null);
   const sorted = useMemo(() => [...weights].sort((a, b) => a.date.localeCompare(b.date)), [weights]);
   const last = sorted[sorted.length - 1];
   const first = sorted[0];
   const target = settings?.nutrition?.targetKg || null;
   const pts = sorted.slice(-60);
-
-  const save = () => {
-    if (!val || val < 30 || val > 300) return toast('Проверь вес: число от 30 до 300');
-    saveWeight(val);
-    setVal(null);
-    toast('Вес записан');
-  };
+  if (!last) return null;
 
   let chart: React.ReactNode = null;
   if (pts.length >= 2) {
@@ -535,25 +529,15 @@ function WeightCard() {
     <div className="card">
       <div className="row between">
         <h3 style={{ margin: 0 }}>⚖️ Вес</h3>
-        {last ? (
-          <span className="small">
-            <b>{String(last.kg).replace('.', ',')} кг</b>
-            {first && first.id !== last.id ? (
-              <span className={last.kg <= first.kg ? 'muted' : 'err-text'}> · {r1(last.kg - first.kg) > 0 ? '+' : ''}{r1(last.kg - first.kg)} кг с {fmtShort(first.date)}</span>
-            ) : null}
-          </span>
-        ) : (
-          <span className="small muted">ещё не вносил</span>
-        )}
+        <span className="small">
+          <b>{String(last.kg).replace('.', ',')} кг</b>
+          {first && first.id !== last.id ? (
+            <span className={last.kg <= first.kg ? 'muted' : 'err-text'}> · {r1(last.kg - first.kg) > 0 ? '+' : ''}{r1(last.kg - first.kg)} кг с {fmtShort(first.date)}</span>
+          ) : null}
+        </span>
       </div>
       {chart}
-      {target && last ? <div className="tiny muted">До цели {target} кг: {r1(last.kg - target)} кг</div> : null}
-      <div className="row" style={{ marginTop: 10 }}>
-        <NumInput value={val} onChange={setVal} placeholder={last ? String(last.kg) : 'Вес сегодня, кг'} className="grow" />
-        <button className="btn" onClick={save}>
-          Записать
-        </button>
-      </div>
+      {target ? <div className="tiny muted">До цели {target} кг: {r1(last.kg - target)} кг</div> : null}
     </div>
   );
 }
@@ -613,11 +597,11 @@ export function FoodScreen() {
         <Icon name="plus" /> Добавить еду
       </button>
 
-      <div className="grid-2" style={{ marginTop: 10 }}>
-        <button className="btn secondary" onClick={() => openSub('fridge')}>
+      <div className="row" style={{ marginTop: 8, justifyContent: 'center', gap: 6 }}>
+        <button className="btn ghost small" onClick={() => openSub('fridge')}>
           🧊 Холодильник и рецепты
         </button>
-        <button className="btn secondary" onClick={() => openSub('basket')}>
+        <button className="btn ghost small" onClick={() => openSub('basket')}>
           🛒 Корзина
         </button>
       </div>
