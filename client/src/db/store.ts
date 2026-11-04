@@ -151,6 +151,18 @@ export function touchTables(tables: TableName[]) {
   for (const l of listeners) l();
 }
 
+/** Пометить все записи для повторной выгрузки (например, сервер переустановлен с нуля) */
+export function markAllDirty() {
+  for (const t of TABLES) {
+    for (const r of data[t].values()) {
+      if (r._dirty) continue;
+      const d = { ...r, _dirty: 1 } as Rec;
+      data[t].set(r.id, d);
+      persist(t, d);
+    }
+  }
+}
+
 export function dirtyRecords() {
   const out: { tbl: TableName; rec: Rec }[] = [];
   for (const t of TABLES) for (const r of data[t].values()) if (r._dirty) out.push({ tbl: t, rec: r });

@@ -1,6 +1,6 @@
 import { api, ApiError, hasServer } from './api';
 import { metaGet, metaSet, TABLES, type TableName } from './db/idb';
-import { applyRemote, createStore, dirtyRecords, flush, markClean, setSyncHook, touchTables } from './db/store';
+import { applyRemote, createStore, dirtyRecords, flush, markAllDirty, markClean, setSyncHook, touchTables } from './db/store';
 
 export const syncStore = createStore<{
   status: 'idle' | 'syncing' | 'error' | 'offline' | 'local';
@@ -28,6 +28,7 @@ export function requestSync(delay = 1500) {
 setSyncHook(() => requestSync());
 
 interface SyncResponse {
+  serverId?: string;
   seq: number;
   changes: { tbl: string; id: string; data: Record<string, unknown>; updatedAt: number; deleted: boolean }[];
 }
@@ -44,6 +45,14 @@ export async function syncNow() {
   running = true;
   syncStore.set({ status: 'syncing' });
   try {
+    // Проверяем, тот ли это сервер: если базу на сервере создали заново — выгружаем туда всё из телефона
+    const knownServer = await metaGet<string>('serverId');
+    const probe = await api<SyncResponse>('/api/sync', { body: { since: Number.MAX_SAFE_INTEGER, changes: [] }, timeoutMs: 30000 });
+    if (probe.serverId && knownServer && probe.serverId !== knownServer) {
+      markAllDirty();
+      await metaSet('lastSeq', 0);
+    }
+    if (probe.serverId && probe.serverId !== knownServer) await metaSet('serverId', probe.serverId);
     let seq = (await metaGet<number>('lastSeq')) ?? 0;
     const changes = dirtyRecords().map(({ tbl, rec }) => {
       const { _dirty, ...data } = rec;

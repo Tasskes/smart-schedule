@@ -60,6 +60,7 @@ test('diff detects removed, added, moved and room changes', () => {
 test('sync: last write wins and pull returns other changes', () => {
   const a = applySync({ since: 0, changes: [{ tbl: 'tasks', id: 't1', updatedAt: 100, data: { id: 't1', title: 'A' } }] });
   assert.equal(a.accepted, 1);
+  assert.match(a.serverId, /^[0-9a-f]{16}$/);
   // более старая версия отклоняется
   const b = applySync({ since: a.seq, changes: [{ tbl: 'tasks', id: 't1', updatedAt: 50, data: { id: 't1', title: 'old' } }] });
   assert.equal(b.accepted, 0);

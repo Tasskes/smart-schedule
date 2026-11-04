@@ -1,4 +1,13 @@
+import crypto from 'node:crypto';
 import { db, kv, tx } from './db.js';
+
+// Уникальный id этой базы: если сервер переустановили с нуля, клиент это заметит
+// и заново выгрузит всё, что хранится в телефоне.
+let serverId = kv.get('serverId');
+if (!serverId) {
+  serverId = crypto.randomBytes(8).toString('hex');
+  kv.set('serverId', serverId);
+}
 
 // Таблицы, которые клиент синхронизирует. Сервер хранит записи «как есть» (JSON),
 // конфликты решаются по updatedAt (последняя правка побеждает).
@@ -37,6 +46,7 @@ export function applySync({ since = 0, changes = [] }) {
     }
     kv.set('seq', seq);
     return {
+      serverId,
       seq,
       accepted,
       changes: pulled.map((r) => ({
