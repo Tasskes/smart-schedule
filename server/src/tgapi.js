@@ -22,12 +22,34 @@ export function netErrorText(e) {
   return code ? `${hint} (${code})` : hint;
 }
 
+/** Проверка TELEGRAM_PROXY: подходят http://, https://, socks5:// (MTProto-прокси для приложения Telegram — нет) */
+export function proxyProblem(url) {
+  if (!url) return null;
+  if (/^tg:|t\.me\/proxy|[?&]secret=/i.test(url)) {
+    return 'это MTProto-прокси для приложения Telegram, боту он не подходит. Нужен HTTP(S) или SOCKS5 прокси';
+  }
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return 'неверный адрес. Пример: socks5://логин:пароль@1.2.3.4:1080 или http://логин:пароль@1.2.3.4:8080';
+  }
+  if (!['http:', 'https:', 'socks5:', 'socks:'].includes(u.protocol)) {
+    return `тип ${u.protocol.replace(':', '')} не поддерживается — нужен http://, https:// или socks5://`;
+  }
+  if (!u.port) return 'не указан порт. Пример: socks5://логин:пароль@1.2.3.4:1080';
+  return null;
+}
+
 let proxy = null;
 async function fetcher() {
-  if (!config.telegram.proxy) return { doFetch: fetch, dispatcher: undefined };
-  if (!proxy) {
+  const url = config.telegram.proxy;
+  if (!url) return { doFetch: fetch, dispatcher: undefined };
+  const problem = proxyProblem(url);
+  if (problem) throw new Error(`TELEGRAM_PROXY: ${problem}`);
+  if (!proxy || proxy.url !== url) {
     const undici = await import('undici');
-    proxy = { doFetch: undici.fetch, dispatcher: new undici.ProxyAgent(config.telegram.proxy) };
+    proxy = { url, doFetch: undici.fetch, dispatcher: new undici.ProxyAgent(url) };
   }
   return proxy;
 }
