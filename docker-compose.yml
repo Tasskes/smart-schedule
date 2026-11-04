@@ -27,14 +27,15 @@ services:
       - app
 
   # VPN-клиент (VLESS) — только чтобы бот достучался до Telegram.
-  # Включается строкой COMPOSE_PROFILES=vpn в .env, конфиг xray.json создаёт скрипт vless-to-xray.
+  # Включается строкой COMPOSE_PROFILES=vpn в .env, конфиг xray/config.json создаёт скрипт vless-to-xray.
+  # Монтируем папку, а не файл: если конфига ещё нет, падает только xray, приложение работает.
   xray:
     image: teddysun/xray
     profiles:
       - vpn
     restart: unless-stopped
     volumes:
-      - ./xray.json:/etc/xray/config.json:ro
+      - ./xray:/etc/xray:ro
 
 volumes:
   caddy_data:

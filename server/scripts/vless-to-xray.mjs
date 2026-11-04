@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Собирает конфиг Xray из VLESS-ключа или ссылки подписки.
 // Использование (на сервере):
-//   docker compose run --rm -T --no-deps app node scripts/vless-to-xray.mjs 'ССЫЛКА_ПОДПИСКИ_или_vless://...' [номер] > xray.json
+//   mkdir -p xray
+//   docker compose run --rm -T --no-deps app node scripts/vless-to-xray.mjs 'ССЫЛКА_ПОДПИСКИ_или_vless://...' [номер] > xray/config.json
 // Список серверов из подписки печатается в консоль; без номера берётся первый.
 import { parseSubscription, parseVless, toXrayOutbound, xrayConfig } from '../src/vless.js';
 
@@ -10,7 +11,7 @@ const log = (...a) => console.error(...a);
 
 async function main() {
   if (!input) {
-    log("Укажи VLESS-ключ или ссылку подписки в кавычках: node scripts/vless-to-xray.mjs 'vless://…' > xray.json");
+    log("Укажи VLESS-ключ или ссылку подписки в кавычках: node scripts/vless-to-xray.mjs 'vless://…' > xray/config.json");
     process.exit(1);
   }
   let keys;
