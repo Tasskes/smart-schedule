@@ -1,5 +1,6 @@
 import { createStore } from './db/store';
 import { todayStr } from './lib/dates';
+import { quietScroll, setBarHidden } from './tabbar';
 import type { ChatMode } from './types';
 
 export type Tab = 'today' | 'week' | 'chat' | 'food' | 'more';
@@ -24,15 +25,18 @@ export const navStore = createStore<{ tab: Tab; sub: Sub; date: string; chatInte
 export function scrollMain(top: number | 'bottom' = 0) {
   const el = document.querySelector('main.content');
   if (!el) return;
+  quietScroll();
   el.scrollTo({ top: top === 'bottom' ? el.scrollHeight : top });
 }
 
 export function go(tab: Tab, sub: Sub = null) {
+  setBarHidden(false);
   navStore.set({ tab, sub });
   requestAnimationFrame(() => scrollMain(0));
 }
 
 export function openSub(sub: Sub) {
+  setBarHidden(false);
   navStore.set({ tab: 'more', sub });
   requestAnimationFrame(() => scrollMain(0));
 }
@@ -42,5 +46,6 @@ export function setDate(date: string) {
 }
 
 export function openChat(intent: ChatIntent) {
+  setBarHidden(false);
   navStore.set({ tab: 'chat', sub: null, chatIntent: intent });
 }

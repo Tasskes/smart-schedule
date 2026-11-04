@@ -14,36 +14,57 @@ import { applyAppearance } from './theme';
 import { isDateStr } from './lib/dates';
 import { navStore } from './nav';
 import { onAfterSync, syncNow } from './sync';
+import { quietScroll, setBarHidden, setupTabbarAutoHide } from './tabbar';
 import './styles.css';
 
 /**
  * iPhone: при открытой клавиатуре видимая часть экрана меньше окна. Подгоняем высоту оболочки
  * под visualViewport, чтобы поле ввода оставалось над клавиатурой, а нижняя панель пряталась.
  */
+// Поля, для которых iPhone открывает клавиатуру (флажки, выбор даты и времени — не в счёт)
+const NO_KEYBOARD = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file', 'image', 'hidden', 'date', 'time', 'datetime-local', 'month', 'week']);
+function isTextEntry(el: Element | null) {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable || el.tagName === 'TEXTAREA') return true;
+  return el instanceof HTMLInputElement && !NO_KEYBOARD.has(el.type);
+}
+
 function setupViewport() {
   const root = document.documentElement;
   const vv = window.visualViewport;
-  let focused = false;
+  // на телефоне фокус в поле ввода = открыта клавиатура; на компьютере панель не прячем
+  const touch = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  let baseW = 0;
+  let baseH = 0; // высота экрана без клавиатуры (максимум при текущей ширине)
+  let keyboard = false;
   const apply = () => {
     const h = vv ? vv.height : window.innerHeight;
     root.style.setProperty('--vv-h', `${Math.round(h)}px`);
     root.style.setProperty('--vv-top', `${Math.round(vv ? vv.offsetTop : 0)}px`);
-    const keyboard = (vv ? window.innerHeight - vv.height > 120 : false) || (focused && !!vv && window.innerHeight - vv.height > 60);
-    root.classList.toggle('kb-open', keyboard);
+    if (window.innerWidth !== baseW) {
+      baseW = window.innerWidth; // повернули экран — меряем заново
+      baseH = 0;
+    }
+    const scale = vv?.scale || 1;
+    if (scale < 1.05) baseH = Math.max(baseH, h, window.innerHeight);
+    const shrunk = touch && scale < 1.05 && baseH - h > 120;
+    const next = shrunk || (touch && isTextEntry(document.activeElement));
+    if (next === keyboard) return;
+    keyboard = next;
+    root.classList.toggle('kb-open', next);
+    quietScroll(600); // экран меняет высоту — это не жест
+    if (!next) setBarHidden(false); // закрыл клавиатуру — панель возвращается
   };
   vv?.addEventListener('resize', apply);
   vv?.addEventListener('scroll', apply);
   window.addEventListener('resize', apply);
   window.addEventListener('orientationchange', () => setTimeout(apply, 300));
-  document.addEventListener('focusin', (e) => {
-    const t = e.target as HTMLElement | null;
-    focused = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-    setTimeout(apply, 50);
-  });
-  document.addEventListener('focusout', () => {
-    focused = false;
-    setTimeout(apply, 50);
-  });
+  document.addEventListener('focusin', () => setTimeout(apply, 0));
+  // при переходе между полями фокус на миг пропадает — не мигаем панелью
+  document.addEventListener('focusout', () => setTimeout(apply, 150));
+  // поле могло исчезнуть вместе с окном, не потеряв фокус «официально», — перепроверяем при касании
+  document.addEventListener('touchstart', () => setTimeout(apply, 0), { capture: true, passive: true });
+  document.addEventListener('visibilitychange', apply);
   // если iOS всё-таки сдвинул страницу к полю ввода — возвращаем, оболочка сама подстроится
   window.addEventListener('scroll', () => {
     if (window.scrollY && !root.classList.contains('kb-open')) window.scrollTo(0, 0);
@@ -134,6 +155,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 
 setupViewport();
+setupTabbarAutoHide();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

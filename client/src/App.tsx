@@ -171,7 +171,7 @@ export function App() {
           <button
             key={t.id}
             className={nav.tab === t.id && !nav.sub ? 'active' : nav.tab === t.id ? 'active' : ''}
-            onClick={() => (nav.tab === t.id && nav.sub ? navStore.set({ sub: null }) : go(t.id))}
+            onClick={() => go(t.id)}
           >
             <Icon name={t.icon} />
             {t.label}
