@@ -53,3 +53,42 @@ test('bad input is explained', () => {
   assert.throws(() => toXrayOutbound(parseVless(`vless://${UUID}@h:443?type=kcp`)), /не поддерживается/);
   assert.throws(() => toXrayOutbound(parseVless(`vless://${UUID}@h:443?security=reality&sni=a`)), /pbk/);
 });
+
+test('balanced config: observatory + leastPing balancer over all servers', async () => {
+  const { xrayBalancedConfig } = await import('../src/vless.js');
+  const c = xrayBalancedConfig([toXrayOutbound(parseVless(REALITY)), toXrayOutbound(parseVless(WS_TLS))]);
+  assert.deepEqual(c.outbounds.map((o) => o.tag), ['proxy-1', 'proxy-2', 'direct']);
+  assert.deepEqual(c.observatory.subjectSelector, ['proxy-']);
+  assert.equal(c.observatory.probeURL, 'https://api.telegram.org/');
+  assert.equal(c.routing.balancers[0].strategy.type, 'leastPing');
+  assert.equal(c.routing.balancers[0].fallbackTag, 'proxy-1');
+  assert.deepEqual(c.routing.rules[0], { type: 'field', inboundTag: ['socks-in'], balancerTag: 'auto' });
+});
+
+test('tcp ping measures a live port and reports dead ones; ranking puts best first', async () => {
+  const net = await import('node:net');
+  const { tcpPing, rankServers, looksRussian } = await import('../src/vless.js');
+  const srv = net.createServer((s) => s.end());
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const port = srv.address().port;
+  const dead = net.createServer();
+  await new Promise((r) => dead.listen(0, '127.0.0.1', r));
+  const deadPort = dead.address().port;
+  await new Promise((r) => dead.close(r));
+
+  const ms = await tcpPing('127.0.0.1', port, { attempts: 2, timeoutMs: 1000 });
+  assert.ok(ms != null && ms >= 0 && ms < 1000);
+  assert.equal(await tcpPing('127.0.0.1', deadPort, { attempts: 1, timeoutMs: 500 }), null);
+
+  const ranked = await rankServers(
+    [
+      { name: 'мёртвый', host: '127.0.0.1', port: deadPort },
+      { name: '🇷🇺 Москва', host: '127.0.0.1', port },
+      { name: '🇳🇱 Амстердам', host: '127.0.0.1', port },
+    ],
+    { attempts: 1, timeoutMs: 500 },
+  );
+  assert.deepEqual(ranked.map((r) => r.v.name), ['🇳🇱 Амстердам', '🇷🇺 Москва', 'мёртвый']);
+  assert.ok(looksRussian('RU Moscow') && looksRussian('🇷🇺') && !looksRussian('🇩🇪 Frankfurt'));
+  srv.close();
+});

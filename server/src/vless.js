@@ -1,5 +1,7 @@
 // Превращаем VLESS-ключ (vless://…) в конфиг Xray-клиента с SOCKS5-прокси внутри сервера.
 // Нужно, когда Telegram недоступен с сервера напрямую: бот ходит через socks5://xray:10808.
+import dns from 'node:dns/promises';
+import net from 'node:net';
 
 const SUPPORTED_NETWORKS = new Set(['tcp', 'raw', 'ws', 'grpc', 'httpupgrade', 'xhttp', 'splithttp', 'h2', 'http']);
 
@@ -83,12 +85,77 @@ export function toXrayOutbound(v) {
   };
 }
 
+const SOCKS_IN = (port) => ({ tag: 'socks-in', listen: '0.0.0.0', port, protocol: 'socks', settings: { auth: 'noauth', udp: false } });
+
 export function xrayConfig(outbound, { socksPort = 10808 } = {}) {
   return {
     log: { loglevel: 'warning' },
-    inbounds: [{ tag: 'socks-in', listen: '0.0.0.0', port: socksPort, protocol: 'socks', settings: { auth: 'noauth', udp: false } }],
+    inbounds: [SOCKS_IN(socksPort)],
     outbounds: [outbound, { tag: 'direct', protocol: 'freedom' }],
   };
+}
+
+/**
+ * Несколько серверов + автовыбор: Xray сам раз в probeInterval проверяет каждый сервер запросом
+ * к probeURL (по умолчанию — Telegram API) и шлёт трафик через самый быстрый из рабочих (leastPing).
+ * Если ни один не ответил — используется fallback (лучший по пингу при сборке конфига).
+ */
+export function xrayBalancedConfig(outbounds, { socksPort = 10808, probeURL = 'https://api.telegram.org/', probeInterval = '2m' } = {}) {
+  if (!outbounds.length) throw new Error('Нет серверов для конфига');
+  const tagged = outbounds.map((o, i) => ({ ...o, tag: `proxy-${i + 1}` }));
+  return {
+    log: { loglevel: 'warning' },
+    inbounds: [SOCKS_IN(socksPort)],
+    outbounds: [...tagged, { tag: 'direct', protocol: 'freedom' }],
+    observatory: { subjectSelector: ['proxy-'], probeURL, probeInterval, enableConcurrency: true },
+    routing: {
+      domainStrategy: 'AsIs',
+      balancers: [{ tag: 'auto', selector: ['proxy-'], strategy: { type: 'leastPing' }, fallbackTag: tagged[0].tag }],
+      rules: [{ type: 'field', inboundTag: ['socks-in'], balancerTag: 'auto' }],
+    },
+  };
+}
+
+/** «Пинг» до сервера: время установки TCP-соединения с его портом (ICMP часто закрыт). Возвращает мс или null. */
+export async function tcpPing(host, port, { attempts = 3, timeoutMs = 2500 } = {}) {
+  let address = host;
+  if (!net.isIP(host)) {
+    try {
+      address = (await dns.lookup(host)).address;
+    } catch {
+      return null;
+    }
+  }
+  const times = [];
+  for (let i = 0; i < attempts; i += 1) {
+    const t = await new Promise((resolve) => {
+      const start = process.hrtime.bigint();
+      const sock = net.connect({ host: address, port });
+      const done = (val) => {
+        sock.destroy();
+        resolve(val);
+      };
+      sock.setTimeout(timeoutMs, () => done(null));
+      sock.once('connect', () => done(Number(process.hrtime.bigint() - start) / 1e6));
+      sock.once('error', () => done(null));
+    });
+    if (t != null) times.push(t);
+  }
+  if (!times.length) return null;
+  return Math.round(Math.min(...times));
+}
+
+const RU_RE = /\u{1F1F7}\u{1F1FA}|росси|russia|москв|moscow|петербург|\bспб\b|\bru\b/iu;
+export const looksRussian = (name) => RU_RE.test(String(name || ''));
+
+/** Пингуем все серверы параллельно и сортируем: сначала рабочие зарубежные, по возрастанию пинга */
+export async function rankServers(servers, opts) {
+  const pinged = await Promise.all(servers.map(async (v) => ({ v, ms: await tcpPing(v.host, v.port, opts), ru: looksRussian(v.name) })));
+  return pinged.sort((a, b) => {
+    if ((a.ms == null) !== (b.ms == null)) return a.ms == null ? 1 : -1;
+    if (a.ru !== b.ru) return a.ru ? 1 : -1;
+    return (a.ms ?? 1e9) - (b.ms ?? 1e9);
+  });
 }
 
 /** Подписка — это base64 или обычный текст со списком ключей по одному в строке */
