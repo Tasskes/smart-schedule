@@ -1,0 +1,154 @@
+import { useEffect, useState } from 'react';
+import { authStore, netStore } from './api';
+import { Icon } from './components/Icon';
+import { afterDone } from './components/ItemRow';
+import { Toasts } from './components/ui';
+import { cancelTimer, runningTimer, stopTimer } from './db/ops';
+import { useTable, useVersion } from './db/store';
+import { balance } from './lib/game';
+import { go, navStore, openSub, type Sub, type Tab } from './nav';
+import { BasketScreen } from './screens/BasketScreen';
+import { ChatScreen } from './screens/ChatScreen';
+import { FoodScreen } from './screens/FoodScreen';
+import { FridgeScreen } from './screens/FridgeScreen';
+import { GoalsScreen } from './screens/GoalsScreen';
+import { LoginScreen } from './screens/LoginScreen';
+import { MoreScreen } from './screens/MoreScreen';
+import { RewardsScreen } from './screens/RewardsScreen';
+import { RoutinesScreen } from './screens/RoutinesScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
+import { TasksScreen } from './screens/TasksScreen';
+import { TodayScreen } from './screens/TodayScreen';
+import { VariablesScreen } from './screens/VariablesScreen';
+import { WeekScreen } from './screens/WeekScreen';
+import { syncStore } from './sync';
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'today', label: 'Сегодня', icon: 'today' },
+  { id: 'week', label: 'Неделя', icon: 'week' },
+  { id: 'chat', label: 'ИИ-чат', icon: 'chat' },
+  { id: 'food', label: 'Еда', icon: 'food' },
+  { id: 'more', label: 'Ещё', icon: 'more' },
+];
+
+const TITLES: Record<Tab, string> = { today: 'Сегодня', week: 'Неделя', chat: 'ИИ-планировщик', food: 'Питание', more: 'Ещё' };
+const SUB_TITLES: Record<Exclude<Sub, null>, string> = {
+  goals: 'Цели',
+  tasks: 'Задачи',
+  variables: 'Переменные',
+  routines: 'Распорядок',
+  rewards: 'Награды',
+  fridge: 'Холодильник',
+  basket: 'Корзина',
+  settings: 'Настройки',
+};
+
+function TimerChip() {
+  useVersion(['events', 'marks']);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const item = runningTimer();
+  if (!item || !item.startedAt) return null;
+  const sec = Math.max(0, Math.floor((Date.now() - item.startedAt) / 1000));
+  const hh = Math.floor(sec / 3600);
+  const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
+  const ss = String(sec % 60).padStart(2, '0');
+  return (
+    <div className="timer-chip">
+      <span className="ellipsis">⏱ {item.title}</span>
+      <b>{hh ? `${hh}:` : ''}{mm}:{ss}</b>
+      <button
+        onClick={() => {
+          const r = stopTimer(item);
+          afterDone(item, r.coins, r.minutes);
+        }}
+      >
+        Готово
+      </button>
+      <button style={{ background: 'transparent', color: 'inherit', padding: '6px 4px' }} onClick={() => cancelTimer(item)} aria-label="Отменить таймер">
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function SyncDot() {
+  const s = syncStore.use();
+  const net = netStore.use();
+  const cls = !net.online || s.status === 'offline' ? 'off' : s.status === 'error' ? 'err' : s.status === 'syncing' ? 'busy' : s.status === 'local' ? 'off' : 'ok';
+  const title = !net.online ? 'Нет интернета — всё сохраняется в телефоне' : s.status === 'error' ? s.error || 'Ошибка' : s.status === 'local' ? 'Без сервера' : 'Синхронизировано';
+  return (
+    <button className="icon-btn plain" style={{ width: 28 }} onClick={() => openSub('settings')} title={title} aria-label={title}>
+      <span className={`status-dot ${cls}`} />
+    </button>
+  );
+}
+
+export function App() {
+  const { token, ready } = authStore.use();
+  const nav = navStore.use();
+  const ledger = useTable('ledger');
+  const net = netStore.use();
+
+  if (!ready) return null;
+  if (!token) return <LoginScreen />;
+
+  const title = nav.sub ? SUB_TITLES[nav.sub] : TITLES[nav.tab];
+  let screen: React.ReactNode;
+  if (nav.sub) {
+    screen = {
+      goals: <GoalsScreen />,
+      tasks: <TasksScreen />,
+      variables: <VariablesScreen />,
+      routines: <RoutinesScreen />,
+      rewards: <RewardsScreen />,
+      fridge: <FridgeScreen />,
+      basket: <BasketScreen />,
+      settings: <SettingsScreen />,
+    }[nav.sub];
+  } else {
+    screen = {
+      today: <TodayScreen />,
+      week: <WeekScreen />,
+      chat: <ChatScreen />,
+      food: <FoodScreen />,
+      more: <MoreScreen />,
+    }[nav.tab];
+  }
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        {nav.sub ? (
+          <button className="back" onClick={() => navStore.set({ sub: null })} aria-label="Назад">
+            <Icon name="left" size={22} />
+          </button>
+        ) : null}
+        <h1>{title}</h1>
+        {!net.online ? <span className="badge">офлайн</span> : null}
+        <SyncDot />
+        <button className="coin-pill" onClick={() => openSub('rewards')} aria-label="Монеты">
+          🪙 {balance(ledger)}
+        </button>
+      </header>
+      <main className={`content ${nav.tab === 'chat' && !nav.sub ? 'chat-main' : ''}`}>{screen}</main>
+      <TimerChip />
+      <nav className="tabbar">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={nav.tab === t.id && !nav.sub ? 'active' : nav.tab === t.id ? 'active' : ''}
+            onClick={() => (nav.tab === t.id && nav.sub ? navStore.set({ sub: null }) : go(t.id))}
+          >
+            <Icon name={t.icon} />
+            {t.label}
+          </button>
+        ))}
+      </nav>
+      <Toasts />
+    </div>
+  );
+}
