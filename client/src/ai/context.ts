@@ -3,6 +3,7 @@ import { scheduleStore, semesterStart } from '../db/schedule';
 import { all, get } from '../db/store';
 import { academicWeek, addDays, DOW_SHORT, dow, fmtDM, minToTime, nowMin, roundUp5, timeToMin, todayStr, weekDays } from '../lib/dates';
 import { adjustedEstimate, personalFactors, taskScheduled, taskSpent } from '../lib/estimate';
+import { isWorkTask, workWeekState } from '../lib/autoplan';
 import { fmtWeekly, isOngoing, weeklyMinutes } from '../lib/goalbudget';
 import { computeTaskLoads } from '../lib/priority';
 import { balance, streak } from '../lib/game';
@@ -81,6 +82,15 @@ export function buildContext(opts: { mode: ChatMode; targetDays?: string[]; goal
     }));
 
   const loads = computeTaskLoads(tasks, events, planner, { today, nowMin: now, dailyCap: planner.engine.minutes('{макс_фокус_в_день}', today) ?? 240 });
+  const goalById = new Map(all('goals').map((g) => [g.id, g]));
+  const thisWeek = weekDays(today)[0];
+  // задача по работе: как обстоит её час на этой неделе
+  const weekHour = (taskId: string) => {
+    const st = workWeekState(taskId, events, thisWeek, today);
+    if (st.done) return 'на этой неделе сделан';
+    if (st.planned) return `стоит ${fmtDM(st.planned.date)} ${st.planned.start}`;
+    return 'ещё не стоит';
+  };
   const openTasks = tasks
     .filter((t) => t.status === 'todo')
     .sort((a, b) => (loads.get(a.id)?.priority ?? 2) - (loads.get(b.id)?.priority ?? 2) || (a.deadline || '9999').localeCompare(b.deadline || '9999'))
@@ -89,6 +99,7 @@ export function buildContext(opts: { mode: ChatMode; targetDays?: string[]; goal
       const est = adjustedEstimate(t, factors);
       const spent = taskSpent(t, events);
       const planned = taskScheduled(t, events, today, now);
+      const work = isWorkTask(t, goalById);
       return {
         id: refs.ref('t', t.id),
         title: cut(t.title, 80),
@@ -99,7 +110,8 @@ export function buildContext(opts: { mode: ChatMode; targetDays?: string[]; goal
         est,
         spent: spent || undefined,
         planned: planned || undefined,
-        left: est != null ? Math.max(0, est - spent - planned) : null,
+        left: work ? undefined : est != null ? Math.max(0, est - spent - planned) : null,
+        weekHour: work ? weekHour(t.id) : undefined,
         reward: t.reward ?? undefined,
         goal: t.goalId ? refs.ref('g', t.goalId) : null,
         ctx: cut(t.context, 200) || undefined,

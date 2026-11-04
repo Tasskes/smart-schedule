@@ -159,6 +159,7 @@ export function createPlanner(st: PlanState) {
         goalId: e.goalId ?? null,
         remindMin: e.remindMin ?? null,
         source: e.source,
+        autoKey: e.autoKey ?? null,
       });
     }
     return items.sort(
@@ -181,8 +182,10 @@ export function createPlanner(st: PlanState) {
   function skeleton(date: string, opts: { replaceAi?: boolean; fromMin?: number | null } = {}) {
     const { wake, sleep } = wakeSleep(date);
     const all = dayItems(date);
+    // час по работе (раз в неделю) ИИ-план не трогает — он для плана как занятое время
     const isReplaceable = (it: DayItem) =>
-      !!opts.replaceAi && it.src === 'event' && (it.source === 'ai' || it.source === 'auto') && it.status === 'planned' &&
+      !!opts.replaceAi && it.src === 'event' && (it.source === 'ai' || (it.source === 'auto' && !(it.autoKey || '').startsWith('work|'))) &&
+      it.status === 'planned' &&
       (opts.fromMin == null || (timeToMin(it.start) ?? 0) >= opts.fromMin);
     const oldAi = all.filter(isReplaceable);
     const busy = all.filter((it) => !isReplaceable(it) && it.status !== 'skipped' && !it.overnight);

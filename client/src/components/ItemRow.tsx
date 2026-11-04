@@ -88,7 +88,11 @@ export function ItemRow({ item, now, onOpen, compact }: { item: DayItem; now?: n
             {item.source === 'auto' ? <span className="badge accent">🤖 авто</span> : null}
             {running ? <span className="badge danger">⏱ идёт</span> : null}
             {item.actualMin ? <span className="badge ok">{fmtDur(item.actualMin)}</span> : null}
-            {item.status === 'skipped' ? <span className="badge">пропущено</span> : null}
+            {item.notes?.startsWith('↪️') ? (
+              <span className="badge warn">{item.notes}</span>
+            ) : item.status === 'skipped' ? (
+              <span className="badge">пропущено</span>
+            ) : null}
           </div>
         ) : null}
       </div>

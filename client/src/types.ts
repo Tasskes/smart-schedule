@@ -376,4 +376,5 @@ export interface DayItem {
   hidden?: boolean;
   overnight?: boolean;
   source?: EventRec['source'];
+  autoKey?: string | null;
 }

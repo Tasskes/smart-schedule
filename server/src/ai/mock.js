@@ -18,7 +18,8 @@ const toMin = (t) => {
 const toTime = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 function planFor(data) {
-  const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+  // как и настоящей нейросети: задачам по работе час в неделю ставит само приложение
+  const tasks = (Array.isArray(data.tasks) ? data.tasks : []).filter((t) => !t.weekHour);
   let ti = 0;
   const days = [];
   for (const day of data.days || []) {

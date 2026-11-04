@@ -7,7 +7,8 @@ import { completeTask } from '../db/ops';
 import { patch, put, remove, useTable } from '../db/store';
 import { autoStore } from '../db/autoplan';
 import { usePlanner } from '../db/planState';
-import { daysBetween, fmtDur, fmtShort, nowMin, todayStr } from '../lib/dates';
+import { isWorkTask, workWeekState } from '../lib/autoplan';
+import { daysBetween, fmtDur, fmtShort, nowMin, todayStr, weekStart } from '../lib/dates';
 import { computeTaskLoads, PRIORITY_LABEL, type TaskLoad } from '../lib/priority';
 import { adjustedEstimate, personalFactors, taskSpent } from '../lib/estimate';
 import { defaultReward } from '../lib/game';
@@ -255,7 +256,17 @@ export function TasksScreen() {
         ),
     [tasks, filter, loads],
   );
-  const unplaced = auto.unplaced.map((u) => ({ ...u, task: tasks.find((t) => t.id === u.taskId) })).filter((u) => u.task && u.task.status === 'todo');
+  const unplacedAll = auto.unplaced.map((u) => ({ ...u, task: tasks.find((t) => t.id === u.taskId) })).filter((u) => u.task && u.task.status === 'todo');
+  const unplaced = unplacedAll.filter((u) => u.reason !== 'week');
+  const noWorkHour = unplacedAll.filter((u) => u.reason === 'week');
+  const goalById = useMemo(() => new Map(goals.map((g) => [g.id, g])), [goals]);
+  // задача по работе: час на этой неделе — сделан, стоит или ещё нет
+  const workBadge = (t: TaskRec) => {
+    const st = workWeekState(t.id, events, weekStart(today), today);
+    if (st.done) return { cls: 'ok', text: '💼 час на неделе сделан' };
+    if (st.planned) return { cls: 'accent', text: `💼 1 ч в неделю · ${fmtShort(st.planned.date)} ${st.planned.start}` };
+    return { cls: 'warn', text: '💼 1 ч в неделю · не стоит' };
+  };
 
   return (
     <>
@@ -281,6 +292,18 @@ export function TasksScreen() {
           </div>
         </div>
       ) : null}
+      {filter === 'todo' && noWorkHour.length ? (
+        <div className="banner warn small">
+          <span>💼</span>
+          <div className="grow">
+            <b>Нет свободного часа на этой неделе</b>
+            {noWorkHour.map((u) => (
+              <div key={u.taskId}>{u.task!.title}</div>
+            ))}
+            <div className="tiny">Задачам по работе положен час в неделю. Освободи окно или подними лимит {'{макс_фокус_в_день}'}.</div>
+          </div>
+        </div>
+      ) : null}
       <div className="list">
         {list.map((t) => {
           const adj = adjustedEstimate(t, factors);
@@ -302,6 +325,7 @@ export function TasksScreen() {
                       {loads.get(t.id)!.manual ? ' ✋' : ''}
                     </span>
                   ) : null}
+                  {t.status === 'todo' && isWorkTask(t, goalById) ? <span className={`badge ${workBadge(t).cls}`}>{workBadge(t).text}</span> : null}
                   {adj ? <span className="badge">⏱ {fmtDur(adj)}</span> : <span className="badge warn">без оценки</span>}
                   {spent ? <span className="badge ok">сделано {fmtDur(spent)}</span> : null}
                   {t.reward ? <span className="badge coin">🪙 {t.reward}</span> : null}

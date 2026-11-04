@@ -1,7 +1,7 @@
 import { hasServer } from '../api';
 import { estimateTask, estimateGoalBudgets } from '../ai/tools';
-import { addDays, daysBetween, nowMin, timeToMin, todayStr, weekStart } from '../lib/dates';
-import { autoPlan } from '../lib/autoplan';
+import { addDays, daysBetween, fmtShort, nowMin, timeToMin, todayStr, weekStart } from '../lib/dates';
+import { autoPlan, isWorkTask, workWeekState, type Unplaced } from '../lib/autoplan';
 import { personalFactors } from '../lib/estimate';
 import { consumeGrams, estimateExpiry, isActive, matchFridge, SPOIL_GRACE_DAYS } from '../lib/fridge';
 import { isOngoing, weeklyMinutes } from '../lib/goalbudget';
@@ -14,7 +14,7 @@ import { metaGet, metaSet } from './idb';
 import { scheduleStore, semesterStart } from './schedule';
 import { all, createStore, get, patch, put, remove } from './store';
 
-export const autoStore = createStore<{ lastRun: number | null; unplaced: { taskId: string; minutes: number }[]; loads: Map<string, TaskLoad> }>({
+export const autoStore = createStore<{ lastRun: number | null; unplaced: Unplaced[]; loads: Map<string, TaskLoad> }>({
   lastRun: null,
   unplaced: [],
   loads: new Map(),
@@ -26,27 +26,32 @@ function minutesVar(planner: ReturnType<typeof createPlanner>, name: string, dat
 }
 
 const isShopEvent = (e: EventRec) => /🛒|магазин|продукт/i.test(e.title);
+const isWorkSession = (e: Pick<EventRec, 'source' | 'autoKey'>) => e.source === 'auto' && (e.autoKey || '').startsWith('work|');
 
 const evMin = (e: Pick<EventRec, 'start' | 'end'>) => Math.max(0, (timeToMin(e.end) ?? 0) - (timeToMin(e.start) ?? 0));
 const overlaps = (a: [number, number], b: [number, number]) => a[0] < b[1] && b[0] < a[1];
 
 /**
- * Пересчитать авто-расписание: задачи по приоритету, время на цели, поход в магазин.
- * Уже поставленные авто-дела остаются на своих местах (план не «ползёт»), убираются только лишние
- * и ставшие невозможными. Если срочная задача не помещается — всё авто-расписание пересобирается.
+ * Пересчитать авто-расписание: задачи по приоритету, час в неделю на каждую задачу по работе, время на цели,
+ * поход в магазин. Уже поставленные авто-дела остаются на своих местах (план не «ползёт»), убираются только
+ * лишние и ставшие невозможными. Если срочная задача не помещается — всё авто-расписание пересобирается.
  */
 export function runAutoPlan() {
   const settings = get('settings', 'main');
   const today = todayStr();
   const now = nowMin();
-  const events = all('events');
   const isFutureAuto = (e: EventRec) =>
     e.source === 'auto' && e.status === 'planned' && (e.date > today || (e.date === today && (timeToMin(e.start) ?? 0) >= now));
-  const existing = events.filter(isFutureAuto);
   if (settings?.autoPlan === false) {
-    for (const e of existing) remove('events', e.id);
+    for (const e of all('events').filter(isFutureAuto)) remove('events', e.id);
     return;
   }
+  // Час по работе, который так и не отметили в свой день, — пропущен; ниже план поставит его на другой день недели
+  for (const e of all('events')) {
+    if (isWorkSession(e) && (e.status ?? 'planned') === 'planned' && e.date < today) patch('events', e.id, { status: 'skipped' });
+  }
+  const events = all('events');
+  const existing = events.filter(isFutureAuto);
   const base = events.filter((e) => !isFutureAuto(e));
   const sched = scheduleStore.get();
   const mkPlanner = (evs: EventRec[]) =>
@@ -114,9 +119,21 @@ export function runAutoPlan() {
       }
       continue;
     }
+    if (key.startsWith('work|')) {
+      const t = e.taskId ? taskById.get(e.taskId) : undefined;
+      if (!t || t.status !== 'todo' || !isWorkTask(t, goalById)) continue;
+      const ws = weekStart(e.date);
+      const st = workWeekState(t.id, base, ws, today);
+      if (st.done || st.planned) continue; // в этой неделе час уже сделан или стоит отдельно
+      if (t.deadline && t.deadline >= today && t.deadline >= ws && e.date > t.deadline) continue; // срок сдвинули раньше
+      if (used.has(`w|${t.id}|${ws}`)) continue; // не больше одного часа в неделю
+      used.set(`w|${t.id}|${ws}`, 1);
+      keep.push(e);
+      continue;
+    }
     if (key.startsWith('task|')) {
       const t = e.taskId ? taskById.get(e.taskId) : undefined;
-      if (!t || t.status !== 'todo' || (t.deadline && e.date > t.deadline)) continue;
+      if (!t || t.status !== 'todo' || isWorkTask(t, goalById) || (t.deadline && e.date > t.deadline)) continue;
       const need = (loads.get(t.id)?.remainingMin ?? 60) - plannedBase((x) => x.taskId === t.id, today, addDays(today, 365), false);
       const already = used.get(`t|${t.id}`) ?? 0;
       if (already + evMin(e) > need + 10) continue; // лишнее — задача стала меньше
@@ -138,7 +155,7 @@ export function runAutoPlan() {
       if (already + evMin(e) > quota + 10) continue;
       if (e.taskId) {
         const t = taskById.get(e.taskId);
-        if (!t || t.status !== 'todo') continue; // задача цели закрыта — блок пересоберём
+        if (!t || t.status !== 'todo' || isWorkTask(t, goalById)) continue; // задача цели закрыта — блок пересоберём
       }
       used.set(k, already + evMin(e));
       keep.push(e);
@@ -165,7 +182,7 @@ export function runAutoPlan() {
   let kept = keep;
   let res = plan(kept);
   // срочное не влезает из-за уже стоящих авто-дел — пересобираем всё с нуля по приоритетам
-  if (kept.length && res.unplaced.some((u) => loads.get(u.taskId)?.priority === 1)) {
+  if (kept.length && res.unplaced.some((u) => u.reason !== 'week' && loads.get(u.taskId)?.priority === 1)) {
     kept = [];
     if (!shopping && existing.some((e) => (e.autoKey || '').startsWith('shop|'))) {
       shopping = { minutes: 45, title: existing.find((e) => (e.autoKey || '').startsWith('shop|'))!.title };
@@ -176,9 +193,22 @@ export function runAutoPlan() {
   const keepIds = new Set(kept.map((e) => e.id));
   for (const e of existing) if (!keepIds.has(e.id)) remove('events', e.id);
   for (const d of res.drafts) {
+    let notes = d.notes || '';
+    if (d.key.startsWith('work|') && d.taskId) {
+      // перенос: последний пропущенный час этой задачи на той же неделе
+      const ws = weekStart(d.date);
+      const missed = all('events')
+        .filter((e) => isWorkSession(e) && e.taskId === d.taskId && e.status === 'skipped' && e.date < d.date && weekStart(e.date) === ws)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .pop();
+      if (missed) {
+        notes = `↪️ перенос с ${fmtShort(missed.date)}`;
+        patch('events', missed.id, { notes: `↪️ перенесено на ${fmtShort(d.date)}` });
+      }
+    }
     put('events', {
       date: d.date, start: d.start, end: d.end, title: d.title, kind: d.kind, source: 'auto', autoKey: d.key,
-      status: 'planned', taskId: d.taskId ?? null, goalId: d.goalId ?? null, reward: d.reward, fixed: false, notes: '',
+      status: 'planned', taskId: d.taskId ?? null, goalId: d.goalId ?? null, reward: d.reward, fixed: false, notes,
     });
   }
   autoStore.set({ lastRun: Date.now(), unplaced: res.unplaced, loads });

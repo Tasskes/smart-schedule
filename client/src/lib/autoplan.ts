@@ -9,9 +9,36 @@ import type { TaskLoad } from './priority';
 
 /**
  * Автоматическое расписание (без нейросети, работает и офлайн).
- * Порядок: срочные задачи → поход в магазин (если нужен) → время на цели → остальные задачи по приоритету и сроку.
+ * Порядок: срочные задачи → час на каждую задачу по работе → поход в магазин (если нужен) → время на цели →
+ * остальные задачи по приоритету и сроку.
  * Ставит «подходы» в свободные окна, с перерывами и не больше дневного лимита сосредоточенной работы.
  */
+
+/** Задаче по работе — один час в неделю */
+export const WORK_SESSION_MIN = 60;
+
+/** Задача по работе: категория «Работа» или привязка к постоянной цели «Работа» */
+export function isWorkTask(t: Pick<TaskRec, 'category' | 'goalId'>, goalById: Map<string, Pick<GoalRec, 'horizon' | 'title'>>) {
+  if (t.category === 'work') return true;
+  const g = t.goalId ? goalById.get(t.goalId) : undefined;
+  return !!g && g.horizon === 'ongoing' && /работ/i.test(g.title);
+}
+
+/**
+ * Что с часом задачи по работе в неделе ws: сделан, стоит впереди (сегодняшний — до конца дня)
+ * или пропущен (день прошёл, а час не отмечен).
+ */
+export function workWeekState(taskId: string, events: EventRec[], ws: string, today: string) {
+  const we = addDays(ws, 6);
+  const own = events.filter((e) => e.taskId === taskId && e.date >= ws && e.date <= we);
+  return {
+    done: own.some((e) => e.status === 'done'),
+    planned: own.find((e) => (e.status ?? 'planned') === 'planned' && e.date >= today) ?? null,
+    missed: own.filter((e) => (e.status ?? 'planned') === 'planned' && e.date < today),
+    /** дни, где час уже пропускали, — переносим на другой день */
+    skippedDays: new Set(own.filter((e) => e.status === 'skipped').map((e) => e.date)),
+  };
+}
 
 export interface AutoDraft {
   key: string;
@@ -23,6 +50,7 @@ export interface AutoDraft {
   taskId?: string | null;
   goalId?: string | null;
   reward: number;
+  notes?: string;
 }
 
 export interface AutoPlanInput {
@@ -41,9 +69,16 @@ export interface AutoPlanInput {
   shopping?: { minutes: number; title: string } | null;
 }
 
+export interface Unplaced {
+  taskId: string;
+  minutes: number;
+  /** deadline — не успевает к сроку; week — нет свободного часа на этой неделе (задача по работе) */
+  reason?: 'deadline' | 'week';
+}
+
 export interface AutoPlanResult {
   drafts: AutoDraft[];
-  unplaced: { taskId: string; minutes: number }[];
+  unplaced: Unplaced[];
 }
 
 const FOCUS_KINDS = new Set<Kind>(['study', 'work', 'task']);
@@ -143,17 +178,66 @@ export function autoPlan(input: AutoPlanInput): AutoPlanResult {
         });
       }
     }
-    if (need >= 15 && t.deadline) unplaced.push({ taskId: t.id, minutes: Math.round(need) });
+    if (need >= 15 && t.deadline) unplaced.push({ taskId: t.id, minutes: Math.round(need), reason: 'deadline' });
   };
 
   const open = tasks.filter((t) => t.status === 'todo');
   const prio = (t: TaskRec) => loads.get(t.id)?.priority ?? t.priority ?? 2;
-  const ordered = [...open].sort(
+  const goalById = new Map(goals.map((g) => [g.id, g]));
+  const sorted = [...open].sort(
     (a, b) => prio(a) - prio(b) || (a.deadline || '9999-12-31').localeCompare(b.deadline || '9999-12-31') || a.createdAt - b.createdAt,
   );
+  const workTasks = sorted.filter((t) => isWorkTask(t, goalById));
+  const ordered = sorted.filter((t) => !isWorkTask(t, goalById)); // задачи по работе живут по своему правилу
 
   // 1. Срочные задачи
   for (const t of ordered.filter((x) => prio(x) === 1)) placeTask(t, 4);
+
+  // 1б. Задачи по работе: каждой — один час в неделю. Не сделан в свой день — ставим на другой день этой недели.
+  //     Ставим на ближайший день со свободным часом, чтобы при пропуске было куда перенести,
+  //     а часы разных задач — на разные дни.
+  const thisWeek = weekStart(today);
+  const workPerDay = new Map<string, number>();
+  for (const ws of [thisWeek, addDays(thisWeek, 7)]) {
+    const we = addDays(ws, 6);
+    const weekDates = dates.filter((d) => d >= ws && d <= we);
+    if (!weekDates.length) continue;
+    for (const t of workTasks) {
+      // к следующей неделе задача со сроком на этой неделе уже должна быть готова
+      if (ws !== thisWeek && t.deadline && t.deadline < ws) continue;
+      const st = workWeekState(t.id, events, ws, today);
+      if (st.done || st.planned) continue;
+      const overdue = !!t.deadline && t.deadline < today;
+      const lastDay = t.deadline && !overdue && t.deadline <= we ? t.deadline : we;
+      const free = weekDates.filter((d) => !st.skippedDays.has(d));
+      const pool = free.filter((d) => d <= lastDay);
+      const order = [
+        ...(overdue ? pool : [...pool].sort((a, b) => (workPerDay.get(a) ?? 0) - (workPerDay.get(b) ?? 0) || a.localeCompare(b))),
+        ...free.filter((d) => d > lastDay), // до срока места нет — хотя бы после
+      ];
+      let placed = false;
+      for (const d of order) {
+        const slot = take(d, WORK_SESSION_MIN);
+        if (!slot) continue;
+        workPerDay.set(d, (workPerDay.get(d) ?? 0) + 1);
+        addDraftTask(t.id, WORK_SESSION_MIN);
+        drafts.push({
+          key: `work|${t.id}|${ws}`,
+          date: d,
+          start: minToTime(slot[0]),
+          end: minToTime(slot[1]),
+          title: t.title,
+          kind: 'work',
+          taskId: t.id,
+          goalId: t.goalId ?? null,
+          reward: defaultReward('work', WORK_SESSION_MIN),
+        });
+        placed = true;
+        break;
+      }
+      if (!placed && ws === thisWeek) unplaced.push({ taskId: t.id, minutes: WORK_SESSION_MIN, reason: 'week' });
+    }
+  }
 
   // 2. Поход в магазин — сегодня вечером или завтра
   if (input.shopping) {
