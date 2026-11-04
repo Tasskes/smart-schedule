@@ -5,21 +5,24 @@ import { Attachments } from '../components/Attachments';
 import { Empty, Field, NumInput, Seg, Sheet, toast } from '../components/ui';
 import { completeTask } from '../db/ops';
 import { patch, put, remove, useTable } from '../db/store';
-import { daysBetween, fmtDur, fmtShort, todayStr } from '../lib/dates';
+import { autoStore } from '../db/autoplan';
+import { usePlanner } from '../db/planState';
+import { daysBetween, fmtDur, fmtShort, nowMin, todayStr } from '../lib/dates';
+import { computeTaskLoads, PRIORITY_LABEL, type TaskLoad } from '../lib/priority';
 import { adjustedEstimate, personalFactors, taskSpent } from '../lib/estimate';
 import { defaultReward } from '../lib/game';
 import { CATEGORIES, horizonLabel } from '../lib/meta';
 import { openChat } from '../nav';
 import type { Category, TaskRec } from '../types';
 
-function TaskSheet({ initial, onClose }: { initial?: Partial<TaskRec>; onClose: () => void }) {
+function TaskSheet({ initial, onClose, load }: { initial?: Partial<TaskRec>; onClose: () => void; load?: TaskLoad }) {
   const goals = useTable('goals');
   const events = useTable('events');
+  const [prioMode, setPrioMode] = useState<'auto' | '1' | '2' | '3'>(initial?.priorityManual && initial.priority ? (String(initial.priority) as '1' | '2' | '3') : 'auto');
   const [title, setTitle] = useState(initial?.title || '');
   const [category, setCategory] = useState<Category>(initial?.category || 'study');
   const [context, setContext] = useState(initial?.context || '');
   const [deadline, setDeadline] = useState(initial?.deadline || '');
-  const [priority, setPriority] = useState<1 | 2 | 3>(initial?.priority || 2);
   const [goalId, setGoalId] = useState(initial?.goalId || '');
   const [estimate, setEstimate] = useState<number | null>(initial?.estimateMin ?? null);
   const [reward, setReward] = useState<number | null>(initial?.reward ?? null);
@@ -34,7 +37,8 @@ function TaskSheet({ initial, onClose }: { initial?: Partial<TaskRec>; onClose: 
     category,
     context,
     deadline: deadline || null,
-    priority,
+    priority: prioMode === 'auto' ? load?.priority ?? initial?.priority ?? 2 : (Number(prioMode) as 1 | 2 | 3),
+    priorityManual: prioMode !== 'auto',
     goalId: goalId || null,
     estimateMin: estimate,
     reward: reward ?? (estimate ? defaultReward('task', estimate) : null),
@@ -90,11 +94,21 @@ function TaskSheet({ initial, onClose }: { initial?: Partial<TaskRec>; onClose: 
           <input className="input" type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </Field>
       </div>
-      <Field label="Приоритет">
-        <Seg<'1' | '2' | '3'>
-          value={String(priority) as '1' | '2' | '3'}
-          onChange={(v) => setPriority(Number(v) as 1 | 2 | 3)}
+      <Field
+        label="Приоритет"
+        hint={
+          prioMode === 'auto'
+            ? load && !load.manual
+              ? `Сейчас: ${PRIORITY_LABEL[load.priority].toLowerCase()} — ${load.reason}`
+              : 'Считается сам по сроку и твоей загруженности'
+            : 'Выставлен вручную'
+        }
+      >
+        <Seg<'auto' | '1' | '2' | '3'>
+          value={prioMode}
+          onChange={setPrioMode}
           options={[
+            { v: 'auto', label: 'Авто' },
             { v: '1', label: 'Высокий' },
             { v: '2', label: 'Обычный' },
             { v: '3', label: 'Низкий' },
@@ -220,6 +234,12 @@ export function TasksScreen() {
   const tasks = useTable('tasks');
   const events = useTable('events');
   const goals = useTable('goals');
+  const planner = usePlanner();
+  const auto = autoStore.use();
+  const loads = useMemo(() => {
+    const cap = planner.engine.minutes('{макс_фокус_в_день}', todayStr()) ?? 240;
+    return computeTaskLoads(tasks, events, planner, { today: todayStr(), nowMin: nowMin(), dailyCap: cap });
+  }, [tasks, events, planner]);
   const [filter, setFilter] = useState<'todo' | 'done'>('todo');
   const [edit, setEdit] = useState<Partial<TaskRec> | null>(null);
   const factors = useMemo(() => personalFactors(tasks, events), [tasks, events]);
@@ -231,10 +251,11 @@ export function TasksScreen() {
         .sort((a, b) =>
           filter === 'done'
             ? (b.doneAt || 0) - (a.doneAt || 0)
-            : (a.deadline || '9999').localeCompare(b.deadline || '9999') || (a.priority ?? 2) - (b.priority ?? 2),
+            : (loads.get(a.id)?.priority ?? 2) - (loads.get(b.id)?.priority ?? 2) || (a.deadline || '9999').localeCompare(b.deadline || '9999'),
         ),
-    [tasks, filter],
+    [tasks, filter, loads],
   );
+  const unplaced = auto.unplaced.map((u) => ({ ...u, task: tasks.find((t) => t.id === u.taskId) })).filter((u) => u.task && u.task.status === 'todo');
 
   return (
     <>
@@ -246,6 +267,20 @@ export function TasksScreen() {
       <Seg<'todo' | 'done'> value={filter} onChange={setFilter} options={[{ v: 'todo', label: 'Активные' }, { v: 'done', label: 'Выполненные' }]} />
       <div style={{ height: 10 }} />
       {!list.length ? <Empty emoji="✅" title={filter === 'todo' ? 'Задач нет' : 'Пока ничего не выполнено'}>Добавь задачу — ИИ оценит объём и время и поставит её в распорядок.</Empty> : null}
+      {filter === 'todo' && unplaced.length ? (
+        <div className="banner warn small">
+          <span>⚠️</span>
+          <div className="grow">
+            <b>Не помещается до срока</b>
+            {unplaced.map((u) => (
+              <div key={u.taskId}>
+                {u.task!.title} — ещё {fmtDur(u.minutes)}
+              </div>
+            ))}
+            <div className="tiny">Освободи время, сдвинь срок или подними лимит {'{макс_фокус_в_день}'}.</div>
+          </div>
+        </div>
+      ) : null}
       <div className="list">
         {list.map((t) => {
           const adj = adjustedEstimate(t, factors);
@@ -257,10 +292,16 @@ export function TasksScreen() {
               <span className="emoji">{CATEGORIES[t.category]?.emoji}</span>
               <div className="grow">
                 <div className="small" style={{ fontWeight: 600 }}>
-                  {t.priority === 1 ? '❗ ' : ''}
                   {t.title}
                 </div>
                 <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>
+                  {t.status === 'todo' && loads.get(t.id) ? (
+                    <span className={`badge ${loads.get(t.id)!.priority === 1 ? 'danger' : loads.get(t.id)!.priority === 2 ? 'warn' : ''}`}>
+                      {loads.get(t.id)!.priority === 1 ? '🔥 ' : ''}
+                      {PRIORITY_LABEL[loads.get(t.id)!.priority].toLowerCase()}
+                      {loads.get(t.id)!.manual ? ' ✋' : ''}
+                    </span>
+                  ) : null}
                   {adj ? <span className="badge">⏱ {fmtDur(adj)}</span> : <span className="badge warn">без оценки</span>}
                   {spent ? <span className="badge ok">сделано {fmtDur(spent)}</span> : null}
                   {t.reward ? <span className="badge coin">🪙 {t.reward}</span> : null}
@@ -296,7 +337,7 @@ export function TasksScreen() {
           </span>
         )}
       </div>
-      {edit ? <TaskSheet initial={edit} onClose={() => setEdit(null)} /> : null}
+      {edit ? <TaskSheet initial={edit} load={edit.id ? loads.get(edit.id) : undefined} onClose={() => setEdit(null)} /> : null}
     </>
   );
 }

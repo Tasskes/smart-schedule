@@ -7,7 +7,7 @@ import { AutoTextarea, Empty, toast } from '../components/ui';
 import { hasServer, netStore } from '../api';
 import { all, get, remove, useTable } from '../db/store';
 import { addDays, fmtShort, todayStr, weekDays } from '../lib/dates';
-import { navStore, openSub } from '../nav';
+import { navStore, openSub, scrollMain } from '../nav';
 import type { ChatMode } from '../types';
 
 interface ModeState {
@@ -64,7 +64,7 @@ export function ChatScreen() {
 
   useEffect(() => {
     // прокручиваем к последнему сообщению (над полем ввода)
-    requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight }));
+    requestAnimationFrame(() => scrollMain('bottom'));
   }, [messages.length, busy]);
 
   useEffect(() => {

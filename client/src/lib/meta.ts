@@ -36,6 +36,7 @@ export function isCategory(c: unknown): c is Category {
 }
 
 export const HORIZONS: { id: Horizon; label: string; days: number }[] = [
+  { id: 'ongoing', label: 'Постоянные', days: 0 },
   { id: '5y', label: '5 лет', days: 1826 },
   { id: '1y', label: 'Год', days: 365 },
   { id: '6m', label: 'Полгода', days: 182 },
@@ -71,3 +72,5 @@ export function mealByTime(min: number): Meal {
   if (min < 21 * 60) return 'dinner';
   return 'snack';
 }
+
+export const TIMED_HORIZONS = HORIZONS.filter((h) => h.id !== 'ongoing');

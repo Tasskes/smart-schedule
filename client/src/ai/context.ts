@@ -3,6 +3,8 @@ import { scheduleStore, semesterStart } from '../db/schedule';
 import { all, get } from '../db/store';
 import { academicWeek, addDays, DOW_SHORT, dow, fmtDM, minToTime, nowMin, roundUp5, timeToMin, todayStr, weekDays } from '../lib/dates';
 import { adjustedEstimate, personalFactors, taskScheduled, taskSpent } from '../lib/estimate';
+import { fmtWeekly, isOngoing, weeklyMinutes } from '../lib/goalbudget';
+import { computeTaskLoads } from '../lib/priority';
 import { balance, streak } from '../lib/game';
 import { horizonLabel } from '../lib/meta';
 import { calcNorms, latestWeight, sumMacros } from '../lib/nutrition';
@@ -73,13 +75,15 @@ export function buildContext(opts: { mode: ChatMode; targetDays?: string[]; goal
       horizon: horizonLabel(g.horizon),
       parent: g.parentId ? refs.ref('g', g.parentId) : null,
       target: g.targetDate || null,
-      progress: g.progress ?? 0,
+      progress: isOngoing(g) ? undefined : g.progress ?? 0,
+      weekly: isOngoing(g) ? 'постоянная' : fmtWeekly(weeklyMinutes(g, tasks, events, factors, today)),
       ctx: cut(g.context, 300) || undefined,
     }));
 
+  const loads = computeTaskLoads(tasks, events, planner, { today, nowMin: now, dailyCap: planner.engine.minutes('{макс_фокус_в_день}', today) ?? 240 });
   const openTasks = tasks
     .filter((t) => t.status === 'todo')
-    .sort((a, b) => (a.deadline || '9999').localeCompare(b.deadline || '9999') || (a.priority ?? 2) - (b.priority ?? 2))
+    .sort((a, b) => (loads.get(a.id)?.priority ?? 2) - (loads.get(b.id)?.priority ?? 2) || (a.deadline || '9999').localeCompare(b.deadline || '9999'))
     .slice(0, 40)
     .map((t) => {
       const est = adjustedEstimate(t, factors);
@@ -90,7 +94,8 @@ export function buildContext(opts: { mode: ChatMode; targetDays?: string[]; goal
         title: cut(t.title, 80),
         cat: t.category,
         deadline: t.deadline || null,
-        prio: t.priority ?? 2,
+        prio: loads.get(t.id)?.priority ?? t.priority ?? 2,
+        prioWhy: loads.get(t.id)?.reason,
         est,
         spent: spent || undefined,
         planned: planned || undefined,

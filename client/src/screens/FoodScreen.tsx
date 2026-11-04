@@ -8,6 +8,7 @@ import { addDays, fmtLong, fmtShort, nowMin, nowTime, todayStr } from '../lib/da
 import { MEAL_LIST, MEALS, mealByTime } from '../lib/meta';
 import { ACTIVITY_LEVELS, calcNorms, latestWeight, r1, scale, sumMacros, type Macros } from '../lib/nutrition';
 import { openSub } from '../nav';
+import { processFoodConsumption } from '../db/autoplan';
 import type { FoodRec, Meal, NutritionProfile } from '../types';
 
 function Ring({ value, max }: { value: number; max: number }) {
@@ -58,6 +59,9 @@ type AddTab = 'ai' | 'manual' | 'base' | 'recent';
 
 function addFood(date: string, meal: Meal, entry: Omit<FoodRec, 'id' | 'updatedAt' | 'date' | 'meal' | 'time'>) {
   put('food', { ...entry, date, meal, time: nowTime() });
+  // списываем из холодильника то, что нашлось
+  const log = processFoodConsumption();
+  if (log.length) toast(`Из холодильника: ${log.map((l) => `${l.item} → ${l.after || 'закончился'}`).join(', ')}`);
 }
 
 function DraftEditor({ draft, onChange, onRemove }: { draft: FoodDraft; onChange: (d: FoodDraft) => void; onRemove: () => void }) {
@@ -369,6 +373,42 @@ function AddFoodSheet({ date, onClose }: { date: string; onClose: () => void }) 
   );
 }
 
+// ---------- Вес ----------
+
+export function saveWeight(kg: number) {
+  const date = todayStr();
+  put('weights', { id: `w-${date}`, date, kg: Math.round(kg * 10) / 10 });
+  // прогресс цели «похудеть», если она связана с весом
+  const sorted = [...all('weights')].sort((a, b) => a.date.localeCompare(b.date));
+  const start = sorted[0]?.kg ?? kg;
+  const target = get('settings', 'main')?.nutrition?.targetKg || null;
+  for (const g of all('goals').filter((x) => x.linkWeight && x.status === 'active')) {
+    if (target && start > target) patch('goals', g.id, { progress: Math.max(0, Math.min(100, Math.round(((start - kg) / (start - target)) * 100))) });
+  }
+}
+
+function WeightSheet({ onClose }: { onClose: () => void }) {
+  const weights = useTable('weights');
+  const last = latestWeight(weights);
+  const [val, setVal] = useState<number | null>(last?.kg ?? null);
+  const save = () => {
+    if (!val || val < 30 || val > 300) return toast('Проверь вес: число от 30 до 300');
+    saveWeight(val);
+    toast('Вес записан');
+    onClose();
+  };
+  return (
+    <Sheet title="Вес сегодня" onClose={onClose}>
+      <Field label="Вес, кг" hint={last ? `Последний раз: ${last.kg} кг (${fmtShort(last.date)})` : 'Например: 84,5'}>
+        <NumInput value={val} onChange={setVal} placeholder="84,5" />
+      </Field>
+      <button className="btn block" onClick={save}>
+        Записать
+      </button>
+    </Sheet>
+  );
+}
+
 // ---------- Нормы ----------
 
 function NormsSheet({ onClose }: { onClose: () => void }) {
@@ -378,10 +418,14 @@ function NormsSheet({ onClose }: { onClose: () => void }) {
   );
   const [prefs, setPrefs] = useState(settings?.foodPrefs || '');
   const weights = useTable('weights');
-  const norms = calcNorms(n, latestWeight(weights)?.kg ?? null);
+  const lastKg = latestWeight(weights)?.kg ?? null;
+  const [kg, setKg] = useState<number | null>(lastKg);
+  const norms = calcNorms(n, kg ?? lastKg);
   const ov = n.override || {};
   const save = () => {
+    if (kg != null && (kg < 30 || kg > 300)) return toast('Проверь вес: число от 30 до 300');
     if (settings) patch('settings', 'main', { nutrition: n, foodPrefs: prefs });
+    if (kg != null && kg !== lastKg) saveWeight(kg);
     toast('Сохранено');
     onClose();
   };
@@ -396,6 +440,9 @@ function NormsSheet({ onClose }: { onClose: () => void }) {
         </Field>
         <Field label="Год рождения">
           <NumInput value={n.birthYear} onChange={(v) => setN({ ...n, birthYear: v })} placeholder="2006" />
+        </Field>
+        <Field label="Текущий вес, кг">
+          <NumInput value={kg} onChange={setKg} placeholder="85" />
         </Field>
         <Field label="Рост, см">
           <NumInput value={n.heightCm} onChange={(v) => setN({ ...n, heightCm: v })} placeholder="180" />
@@ -424,7 +471,7 @@ function NormsSheet({ onClose }: { onClose: () => void }) {
           </b>
           <div>{norms.note}</div>
           {norms.tdee ? <div className="tiny muted">Обмен веществ ≈ {norms.bmr} ккал, расход ≈ {norms.tdee} ккал в день</div> : null}
-          {!latestWeight(weights) ? <div className="tiny">Внеси текущий вес на экране «Еда».</div> : null}
+          {kg == null ? <div className="tiny">Укажи текущий вес — без него норму не посчитать.</div> : null}
         </div>
       </div>
       <div className="section-title">Свои значения (необязательно)</div>
@@ -458,14 +505,8 @@ function WeightCard() {
   const pts = sorted.slice(-60);
 
   const save = () => {
-    if (!val || val < 30 || val > 300) return toast('Проверь вес');
-    const date = todayStr();
-    put('weights', { id: `w-${date}`, date, kg: val });
-    // прогресс цели «похудеть», если она связана с весом
-    const start = first?.kg ?? val;
-    for (const g of all('goals').filter((x) => x.linkWeight && x.status === 'active')) {
-      if (target && start > target) patch('goals', g.id, { progress: Math.max(0, Math.min(100, Math.round(((start - val) / (start - target)) * 100))) });
-    }
+    if (!val || val < 30 || val > 300) return toast('Проверь вес: число от 30 до 300');
+    saveWeight(val);
     setVal(null);
     toast('Вес записан');
   };
@@ -496,7 +537,7 @@ function WeightCard() {
         <h3 style={{ margin: 0 }}>⚖️ Вес</h3>
         {last ? (
           <span className="small">
-            <b>{last.kg} кг</b>
+            <b>{String(last.kg).replace('.', ',')} кг</b>
             {first && first.id !== last.id ? (
               <span className={last.kg <= first.kg ? 'muted' : 'err-text'}> · {r1(last.kg - first.kg) > 0 ? '+' : ''}{r1(last.kg - first.kg)} кг с {fmtShort(first.date)}</span>
             ) : null}
@@ -523,6 +564,7 @@ export function FoodScreen() {
   const [date, setDate] = useState(todayStr());
   const [adding, setAdding] = useState(false);
   const [norms, setNorms] = useState(false);
+  const [weighing, setWeighing] = useState(false);
   const food = useTable('food');
   const weights = useTable('weights');
   const settings = useRecord('settings', 'main');
@@ -555,9 +597,14 @@ export function FoodScreen() {
         </div>
         <div className="row between" style={{ marginTop: 10 }}>
           <span className="tiny muted">{n.kcal - Math.round(eaten.kcal) >= 0 ? `Осталось ${n.kcal - Math.round(eaten.kcal)} ккал` : `Перебор ${Math.round(eaten.kcal) - n.kcal} ккал`}</span>
-          <button className="btn ghost small" onClick={() => setNorms(true)}>
-            Моя норма
-          </button>
+          <div className="row" style={{ gap: 4 }}>
+            <button className="btn ghost small" onClick={() => setWeighing(true)}>
+              ⚖️ {latestWeight(weights) ? `${String(latestWeight(weights)!.kg).replace('.', ',')} кг` : 'Вес'}
+            </button>
+            <button className="btn ghost small" onClick={() => setNorms(true)}>
+              Моя норма
+            </button>
+          </div>
         </div>
         {!n.complete ? <div className="banner warn small" style={{ marginTop: 8, marginBottom: 0 }}>{n.note}</div> : null}
       </div>
@@ -620,6 +667,7 @@ export function FoodScreen() {
 
       {adding ? <AddFoodSheet date={date} onClose={() => setAdding(false)} /> : null}
       {norms ? <NormsSheet onClose={() => setNorms(false)} /> : null}
+      {weighing ? <WeightSheet onClose={() => setWeighing(false)} /> : null}
     </>
   );
 }

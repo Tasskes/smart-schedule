@@ -106,16 +106,18 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
-body { font-size: 16px; line-height: 1.35; overscroll-behavior-y: none; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); height: 100%; overflow: hidden; }
+body { font-size: 16px; line-height: 1.35; overscroll-behavior: none; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 a { color: var(--accent); }
 
-.app { min-height: 100dvh; display: flex; flex-direction: column; }
+/* Оболочка приложения: страница не прокручивается, прокручивается только середина.
+   Так нижняя панель на iPhone не «прыгает» и не уезжает вместе с клавиатурой. */
+.app { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, 100dvh); display: flex; flex-direction: column; overflow: hidden; }
 
 .topbar {
-  position: sticky; top: 0; z-index: 20;
+  position: relative; z-index: 20; flex: none;
   padding: calc(env(safe-area-inset-top) + 8px) 16px 8px;
   background: var(--bg);
   display: flex; align-items: center; gap: 10px;
@@ -130,10 +132,11 @@ a { color: var(--accent); }
 .status-dot.err { background: var(--danger); }
 .status-dot.busy { background: var(--warn); }
 
-main.content { flex: 1; padding: 4px 16px calc(var(--tab-h) + env(safe-area-inset-bottom) + 24px); max-width: 760px; width: 100%; margin: 0 auto; }
+main.content { flex: 1 1 auto; min-height: 0; width: 100%; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
+.content-inner { max-width: 760px; margin: 0 auto; padding: 4px 16px 28px; }
 
 .tabbar {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
+  position: relative; flex: none; z-index: 30;
   height: calc(var(--tab-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   display: grid; grid-template-columns: repeat(5, 1fr);
@@ -259,8 +262,8 @@ main.content { flex: 1; padding: 4px 16px calc(var(--tab-h) + env(safe-area-inse
 .timer-chip button { border: 0; border-radius: 999px; background: var(--danger); color: #fff; padding: 6px 12px; font-weight: 600; }
 
 /* Нижняя шторка */
-.sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 50; display: flex; align-items: flex-end; justify-content: center; animation: fade 0.15s ease-out; }
-.sheet { background: var(--bg); width: 100%; max-width: 760px; max-height: 92dvh; border-radius: 18px 18px 0 0; display: flex; flex-direction: column; animation: up 0.2s ease-out; padding-bottom: env(safe-area-inset-bottom); }
+.sheet-backdrop { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, 100dvh); background: rgba(0, 0, 0, 0.35); z-index: 50; display: flex; align-items: flex-end; justify-content: center; animation: fade 0.15s ease-out; }
+.sheet { background: var(--bg); width: 100%; max-width: 760px; max-height: calc(var(--vv-h, 100dvh) * 0.94); border-radius: 18px 18px 0 0; display: flex; flex-direction: column; animation: up 0.2s ease-out; padding-bottom: env(safe-area-inset-bottom); }
 .sheet-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px 8px; }
 .sheet-head h2 { margin: 0; font-size: 18px; flex: 1; }
 .sheet-grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 0; }
@@ -268,7 +271,7 @@ main.content { flex: 1; padding: 4px 16px calc(var(--tab-h) + env(safe-area-inse
 @keyframes up { from { transform: translateY(40px); opacity: 0.5; } to { transform: none; opacity: 1; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
-.toast-wrap { position: fixed; top: calc(env(safe-area-inset-top) + 64px); left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 100; pointer-events: none; padding: 0 16px; }
+.toast-wrap { position: fixed; top: calc(var(--vv-top, 0px) + env(safe-area-inset-top) + 64px); left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 100; pointer-events: none; padding: 0 16px; }
 .toast { pointer-events: auto; background: var(--text); color: var(--bg); padding: 10px 14px; border-radius: 12px; font-size: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); display: flex; gap: 10px; align-items: center; max-width: 520px; animation: fade 0.15s; }
 .toast button { border: 0; background: none; color: var(--accent); font-weight: 700; padding: 0; }
 @media (prefers-color-scheme: dark) { .toast button { color: #4f46e5; } }
@@ -291,7 +294,7 @@ main.content { flex: 1; padding: 4px 16px calc(var(--tab-h) + env(safe-area-inse
 .typing i:nth-child(2) { animation-delay: 0.2s; }
 .typing i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
-.composer { position: sticky; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom)); background: var(--bg); padding: 8px 0 10px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; border-top: 1px solid var(--line); z-index: 15; }
+.composer { position: sticky; bottom: 0; background: var(--bg); padding: 8px 16px 10px; margin: 0 -16px; border-top: 1px solid var(--line); z-index: 15; }
 .composer .box { display: flex; gap: 8px; align-items: flex-end; }
 .composer textarea { flex: 1; border: 1px solid var(--line); background: var(--card); border-radius: 20px; padding: 10px 14px; resize: none; max-height: 160px; min-height: 42px; font-size: 16px; outline: none; }
 .composer .send { width: 42px; height: 42px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-text); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -346,7 +349,10 @@ svg { flex-shrink: 0; }
 .kbd { font-family: ui-monospace, 'SF Mono', Menlo, monospace; background: var(--card-2); padding: 1px 5px; border-radius: 5px; font-size: 13px; word-break: break-all; }
 
 .day-summary { width: 100%; border: 0; background: var(--card); border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; text-align: left; font-size: 14px; }
-main.content.chat-main { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom)); }
+main.content.chat-main .content-inner { padding-bottom: 0; }
+
+/* Открыта клавиатура — прячем нижнюю панель и плавающие кнопки, чтобы не закрывали поле ввода */
+.kb-open .tabbar, .kb-open .fab, .kb-open .timer-chip { display: none; }
 
 /* ===== Темы оформления ===== */
 :root[data-theme="pastel"] {

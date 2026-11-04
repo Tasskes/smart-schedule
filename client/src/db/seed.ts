@@ -45,6 +45,10 @@ const REWARDS: Omit<RewardRec, 'updatedAt'>[] = [
 const now = Date.now();
 const GOALS: Omit<GoalRec, 'updatedAt'>[] = [
   {
+    id: 'seed-g-work', title: 'Работа', horizon: 'ongoing', targetDate: null, status: 'active', progress: 0, createdAt: now,
+    context: 'Удалённая работа по заказам: бывают с дедлайнами, бывают без. Постоянная цель — время под неё отдельно не резервируется, задачи по заказам планируются по своим срокам.',
+  },
+  {
     id: 'seed-g-toefl', title: 'Сдать TOEFL', horizon: '5y', targetDate: '2029-06-01', status: 'active', progress: 0, createdAt: now,
     context: 'Срок: через 2–3 года. Допиши: текущий уровень английского, нужный балл и зачем он нужен.',
   },
@@ -67,6 +71,9 @@ export function seedIfNeeded() {
       nutrition: { sex: 'm', birthYear: null, heightCm: null, activity: 1.375, targetKg: null, targetDate: '2027-06-01', override: {} },
       foodPrefs: '',
       budgetWeek: null,
+      autoPlan: true,
+      fridgeAuto: true,
+      stores: ['Пятёрочка', 'Чижик', 'Перекрёсток'],
       createdAt: now,
     };
     put('settings', settings, OLD);

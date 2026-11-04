@@ -176,12 +176,25 @@ export function recentChanges(days = 21) {
 
 let refreshing = null;
 
+// Сайт ТулГУ иногда (например, ночью во время обновления базы) отдаёт пустое расписание.
+// Если раньше пары были, пустому ответу не верим сразу — иначе пришли бы уведомления
+// «отменена» по всем парам, а через полчаса «добавлена». Принимаем пустоту, только если она держится сутки.
+export const EMPTY_TRUST_MS = 24 * 3600000;
+
 export function refreshSchedule() {
   if (refreshing) return refreshing;
   refreshing = (async () => {
     const prev = getSnapshot();
     try {
       const fresh = await fetchSchedule();
+      if (!fresh.classes.length && prev?.classes?.length) {
+        const emptySince = prev.emptySince || Date.now();
+        if (Date.now() - emptySince < EMPTY_TRUST_MS) {
+          const err = new Error('сайт вернул пустое расписание — показываю последнее сохранённое');
+          err.emptySince = emptySince;
+          throw err;
+        }
+      }
       const h = hash(JSON.stringify([fresh.classes, fresh.periods])).slice(0, 16);
       const snapshot = { ...fresh, hash: h, fetchedAt: Date.now(), lastAttempt: Date.now(), error: null };
       if (prev && prev.hash !== h && Array.isArray(prev.classes) && prev.classes.length) {
@@ -203,6 +216,7 @@ export function refreshSchedule() {
       return snapshot;
     } catch (e) {
       const failed = { ...(prev || { group: config.tulsu.group, classes: [], periods: [] }), lastAttempt: Date.now(), error: String(e.message || e) };
+      if (e.emptySince) failed.emptySince = e.emptySince;
       kv.set('schedule', failed);
       console.warn('[tulsu] fetch failed:', failed.error);
       return failed;

@@ -20,14 +20,21 @@ export const navStore = createStore<{ tab: Tab; sub: Sub; date: string; chatInte
   chatIntent: null,
 });
 
+/** Прокрутка средней части экрана (сама страница не прокручивается) */
+export function scrollMain(top: number | 'bottom' = 0) {
+  const el = document.querySelector('main.content');
+  if (!el) return;
+  el.scrollTo({ top: top === 'bottom' ? el.scrollHeight : top });
+}
+
 export function go(tab: Tab, sub: Sub = null) {
   navStore.set({ tab, sub });
-  window.scrollTo({ top: 0 });
+  requestAnimationFrame(() => scrollMain(0));
 }
 
 export function openSub(sub: Sub) {
   navStore.set({ tab: 'more', sub });
-  window.scrollTo({ top: 0 });
+  requestAnimationFrame(() => scrollMain(0));
 }
 
 export function setDate(date: string) {

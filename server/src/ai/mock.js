@@ -129,6 +129,26 @@ export async function mockComplete({ messages }) {
       };
       break;
     }
+    case 'goal_budget':
+      out = {
+        reply: 'Тестовый расчёт: по 2 часа в неделю на цель.',
+        goals: (data.goals || []).map((g) => ({ id: g.id, effortHours: 20, weeklyHours: 2, sessionMin: 60, note: 'тестовая оценка' })),
+      };
+      break;
+    case 'shopping': {
+      const free = (data.free || [])[0] || `${data.today} 18:00–20:00`;
+      const [date, span] = free.split(' ');
+      out = {
+        when: { date, start: span.split('–')[0], reason: 'свободное окно' },
+        stores: [
+          { store: (data.stores || ['Чижик'])[0], items: [{ name: 'Яйца С1', qty: '10 шт', amount: 10, unit: 'шт', price: 110 }, { name: 'Гречка', qty: '900 г', amount: 900, unit: 'г', price: 85 }] },
+          { store: (data.stores || ['', 'Пятёрочка'])[1] || 'Пятёрочка', items: [{ name: 'Огурцы', qty: '1 кг', amount: 1, unit: 'кг', price: 160 }] },
+        ],
+        total: 355,
+        reply: 'Тестовый список покупок.',
+      };
+      break;
+    }
     case 'conversation': {
       const firstText = (last.split('[РЕЖИМ')[0].match(/\]:\s*(.+)/) || [])[1] || 'Задача из переписки';
       out = {

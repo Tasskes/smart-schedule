@@ -170,7 +170,8 @@ test('VK: several forwarded messages with photo and voice become one task', asyn
   setMediaImpl({ stt: async () => 'расшифровка из вк', ocr: async () => 'текст со скрина' });
   const vkMsg = (extra) => ({ type: 'message_new', object: { message: { id: 1, from_id: 555, peer_id: 555, date: 1793800000, text: '', fwd_messages: [], ...extra } } });
   await handleVkUpdate(vkMsg({ text: vkPairCode() }));
-  const before = listRecords('tasks').length;
+  const beforeIds = new Set(listRecords('tasks').map((t) => t.id));
+  const before = beforeIds.size;
   await handleVkUpdate(
     vkMsg({
       fwd_messages: [
@@ -182,7 +183,7 @@ test('VK: several forwarded messages with photo and voice become one task', asyn
   );
   const tasks = listRecords('tasks');
   assert.equal(tasks.length, before + 1);
-  const t = tasks.at(-1);
+  const t = tasks.find((x) => !beforeIds.has(x.id));
   assert.match(t.context, /расшифровка из вк/);
   assert.match(t.context, /текст со скрина/);
   assert.equal(fs.readFileSync(filePath(t.attachments.find((a) => a.kind === 'image').id)).toString(), 'vk-https://vk/x.jpg');

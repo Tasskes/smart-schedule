@@ -153,7 +153,7 @@ export function App() {
     <div className="app">
       <header className="topbar">
         {nav.sub ? (
-          <button className="back" onClick={() => navStore.set({ sub: null })} aria-label="Назад">
+          <button className="back" onClick={() => go(nav.tab)} aria-label="Назад">
             <Icon name="left" size={22} />
           </button>
         ) : null}
@@ -162,7 +162,9 @@ export function App() {
         <SyncDot />
         <CoinPill />
       </header>
-      <main className={`content ${nav.tab === 'chat' && !nav.sub ? 'chat-main' : ''}`}>{screen}</main>
+      <main className={`content ${nav.tab === 'chat' && !nav.sub ? 'chat-main' : ''}`}>
+        <div className="content-inner">{screen}</div>
+      </main>
       <TimerChip />
       <nav className="tabbar">
         {TABS.map((t) => (

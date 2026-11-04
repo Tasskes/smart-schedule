@@ -319,6 +319,8 @@ export function applyActions(msg: ChatRec): AppliedInfo {
     if (!e) continue;
     const fields: Record<string, unknown> = {};
     for (const k of ['date', 'start', 'end', 'title', 'notes'] as const) if (a[k]) fields[k] = a[k];
+    // дело из авторасписания, которое двигают вручную, становится «своим» — автоплан его больше не трогает
+    if (e.source === 'auto') fields.source = 'manual';
     patch('events', a.id, fields);
     info.summary.push(`Изменено: ${e.title}`);
   }

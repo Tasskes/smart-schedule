@@ -23,12 +23,14 @@ export const INBOX_SYSTEM = `Ты — «Входящие» личного пла
 - Вопрос про расписание («что у меня завтра?») — ответь в reply по данным days, без действий.
 - В одном сообщении может быть несколько действий.
 - Оценки задач реалистичные (пользователь ленивый): estimateMin в минутах, complexity 1–5, reward ≈ estimateMin/5 (×1.5 для сложных и неприятных).
+- НЕ привязывай задачи к целям сам: "goal" — только если пользователь прямо попросил («к цели TOEFL», «это для цели…»), иначе null.
+- priority ставь по сроку: срок сегодня-завтра — 1, в ближайшие дни — 2, без срока — 3 (приложение потом уточнит по загруженности).
 - Даты считай от today: «завтра», «в четверг» — ближайший будущий четверг. Формат YYYY-MM-DD и HH:MM.
 - Если событие пересекается с занятым временем — коротко предупреди в reply.
 
 Ответ — строго один JSON-объект:
 {"reply":"1–2 коротких предложения по-русски","actions":[
- {"type":"add_task","title":"…","category":"study|work|english|sport|home|other","deadline":"YYYY-MM-DD или null","priority":1,"estimateMin":90,"complexity":3,"reward":18,"goal":"id цели или null","context":"детали"},
+ {"type":"add_task","title":"…","category":"study|work|english|sport|home|other","deadline":"YYYY-MM-DD или null","priority":2,"estimateMin":90,"complexity":3,"reward":18,"goal":null,"context":"детали"},
  {"type":"add_event","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","title":"…","kind":"tutor|work|sport|other","notes":"…"},
  {"type":"log_food","items":[{"name":"…","grams":200,"kcal":220,"p":8,"f":3,"c":40,"meal":"breakfast|lunch|dinner|snack"}]},
  {"type":"add_fridge","items":[{"name":"…","amount":1,"unit":"г|кг|шт|л|мл|уп","expires":null}]},
@@ -116,7 +118,7 @@ export async function processInbox(text, from = '', { attachments = [] } = {}) {
   } catch (e) {
     return saveAsNote(text, from, `Нейросеть сейчас недоступна (${e.message}). Сохранил как заметку — разберёшь в приложении.`, attachments);
   }
-  const actions = normalizeTgActions(parsed?.actions, refs, { tutorMin: parseDurationMin(tutorVar?.expr, 60) });
+  const actions = dropGoals(normalizeTgActions(parsed?.actions, refs, { tutorMin: parseDurationMin(tutorVar?.expr, 60) }), text);
   const reply = typeof parsed?.reply === 'string' ? parsed.reply.trim() : '';
   if (!actions.length) {
     if (reply) return { text: esc(reply), batchId: null };
@@ -148,6 +150,16 @@ const CONVO_INSTRUCTION = `[РЕЖИМ: ПЕРЕПИСКА → ОДНА ЗАДА
 - estimateMin, complexity, reward — реалистично по объёму работы;
 - context — структурированная выжимка по-русски с пунктами «Кто просит», «Что сделать», «Детали и требования», «Сроки», «Материалы и ссылки». Не теряй важное из голосовых и картинок.
 Других действий не добавляй. reply — одно предложение: о чём задача.`;
+
+/** Пользователь сам попросил привязать к цели? («к цели …», «для цели …», «в цель …») */
+export function asksForGoal(text) {
+  return /(^|[^а-яё])цел(ь|и|ью|ям|ям|ей|ях)([^а-яё]|$)/i.test(String(text || ''));
+}
+
+function dropGoals(actions, text) {
+  if (asksForGoal(text)) return actions;
+  return actions.map((a) => (a.type === 'add_task' ? { ...a, goalId: null } : a));
+}
 
 const plural = (n, one, few, many) => {
   const m10 = n % 10;
@@ -184,7 +196,7 @@ export async function processConversation(convo, { from = '' } = {}) {
       });
       const parsed = parseJsonLoose(out.text);
       reply = typeof parsed?.reply === 'string' ? parsed.reply.trim() : '';
-      task = normalizeTgActions(parsed?.actions, refs).find((a) => a.type === 'add_task') || null;
+      task = dropGoals(normalizeTgActions(parsed?.actions, refs), full).find((a) => a.type === 'add_task') || null;
     } catch (e) {
       problemLines.push(`⚠️ Нейросеть недоступна (${esc(e.message)}) — задачу собрал без неё`);
     }

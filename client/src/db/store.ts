@@ -195,6 +195,24 @@ export function importAll(dump: Record<string, Rec[]>) {
   return n;
 }
 
+/** Вызвать fn, когда меняется любая из таблиц (с задержкой, чтобы пачка изменений дала один вызов) */
+export function onTablesChange(tables: TableName[], fn: () => void, delay = 1200) {
+  let snapshot = tables.map((t) => versions[t]).join('.');
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const check = () => {
+    const now = tables.map((t) => versions[t]).join('.');
+    if (now === snapshot) return;
+    snapshot = now;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      fn();
+    }, delay);
+  };
+  listeners.add(check);
+  return () => listeners.delete(check);
+}
+
 function subscribe(fn: () => void) {
   listeners.add(fn);
   return () => listeners.delete(fn);

@@ -3,7 +3,7 @@ export type Kind =
   | 'meal' | 'routine' | 'commute' | 'sleep' | 'other';
 
 export type Category = 'study' | 'work' | 'english' | 'sport' | 'home' | 'other';
-export type Horizon = '5y' | '1y' | '6m' | '3m' | '1m' | '1w';
+export type Horizon = 'ongoing' | '5y' | '1y' | '6m' | '3m' | '1m' | '1w';
 export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export interface Base {
@@ -20,7 +20,8 @@ export interface EventRec extends Base {
   title: string;
   kind: Kind;
   fixed?: boolean;
-  source: 'ai' | 'manual' | 'tutor';
+  source: 'ai' | 'manual' | 'tutor' | 'auto';
+  autoKey?: string | null;
   taskId?: string | null;
   goalId?: string | null;
   notes?: string;
@@ -59,6 +60,9 @@ export interface TaskRec extends Base {
   createdAt: number;
   source?: 'telegram' | 'app';
   attachments?: Attachment[];
+  /** true — приоритет выставлен вручную; иначе считается сам по сроку и загруженности */
+  priorityManual?: boolean;
+  estimateTriedAt?: number | null;
 }
 
 export interface GoalRec extends Base {
@@ -71,6 +75,13 @@ export interface GoalRec extends Base {
   progress?: number;
   linkWeight?: boolean;
   createdAt: number;
+  /** сколько минут в неделю уделять цели (для постоянных целей не считается) */
+  weeklyMin?: number | null;
+  weeklyManual?: boolean;
+  sessionMin?: number | null;
+  effortMin?: number | null;
+  budgetNote?: string;
+  budgetAt?: number | null;
 }
 
 export interface VariableRec extends Base {
@@ -118,6 +129,8 @@ export interface FoodRec extends Base {
   c: number;
   productId?: string | null;
   source: 'ai' | 'manual' | 'product' | 'recipe';
+  /** уже списано из холодильника (или проверено, что списывать нечего) */
+  fridgeChecked?: boolean;
 }
 
 export interface ProductRec extends Base {
@@ -142,6 +155,13 @@ export interface FridgeRec extends Base {
   amount?: number | null;
   unit?: string;
   expires?: string | null;
+  expiresEstimated?: boolean;
+  addedAt?: number | null;
+  initialAmount?: number | null;
+  price?: number | null;
+  /** ok — лежит; used — съедено целиком; spoiled — испортилось/выброшено */
+  status?: 'ok' | 'used' | 'spoiled';
+  closedAt?: number | null;
 }
 
 export interface RewardRec extends Base {
@@ -270,7 +290,30 @@ export interface SettingsRec extends Base {
   foodPrefs?: string;
   budgetWeek?: number | null;
   appearance?: Appearance;
+  /** автоматически ставить задачи, цели и походы в магазин в расписание */
+  autoPlan?: boolean;
+  /** списывать съеденное из холодильника */
+  fridgeAuto?: boolean;
+  stores?: string[];
+  shopping?: ShoppingPlan | null;
   createdAt: number;
+}
+
+export interface ShoppingItem {
+  name: string;
+  qty: string;
+  price?: number | null;
+  amount?: number | null;
+  unit?: string;
+  checked?: boolean;
+}
+
+export interface ShoppingPlan {
+  at: number;
+  when?: { date: string; start: string; reason: string } | null;
+  stores: { store: string; items: ShoppingItem[] }[];
+  total?: number | null;
+  reply?: string;
 }
 
 export interface ClassItem {

@@ -10,7 +10,7 @@ const upsert = db.prepare(`
     deleted = excluded.deleted, seq = excluded.seq
 `);
 const getOne = db.prepare('SELECT data, updated_at FROM records WHERE tbl = ? AND id = ?');
-const listStmt = db.prepare('SELECT data FROM records WHERE tbl = ? AND deleted = 0');
+const listStmt = db.prepare('SELECT data FROM records WHERE tbl = ? AND deleted = 0 ORDER BY seq');
 
 function putRaw(tbl, data) {
   const id = data.id || crypto.randomUUID();

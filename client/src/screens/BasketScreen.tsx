@@ -92,6 +92,43 @@ function PriceSheet({ initial, onClose }: { initial?: PriceRec; onClose: () => v
   );
 }
 
+function StoresCard() {
+  const settings = useRecord('settings', 'main');
+  const [name, setName] = useState('');
+  const stores = settings?.stores?.length ? settings.stores : ['Пятёрочка', 'Чижик', 'Перекрёсток'];
+  const save = (list: string[]) => patch('settings', 'main', { stores: list });
+  return (
+    <div className="card">
+      <div className="label" style={{ marginBottom: 8 }}>
+        Мои магазины (ИИ выбирает из них, где что покупать)
+      </div>
+      <div className="row wrap" style={{ gap: 6 }}>
+        {stores.map((s) => (
+          <span key={s} className="chip" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+            {s}
+            <button className="btn ghost small" style={{ minHeight: 0, padding: 0 }} aria-label={`Убрать ${s}`} onClick={() => save(stores.filter((x) => x !== s))}>
+              ✕
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <input className="input grow" value={name} onChange={(e) => setName(e.target.value)} placeholder="Добавить: Магнит, Лента…" />
+        <button
+          className="btn small"
+          disabled={!name.trim()}
+          onClick={() => {
+            if (!stores.includes(name.trim())) save([...stores, name.trim()]);
+            setName('');
+          }}
+        >
+          Добавить
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function BasketScreen() {
   const prices = useTable('prices');
   const weights = useTable('weights');
@@ -114,6 +151,7 @@ export function BasketScreen() {
 
   return (
     <>
+      <StoresCard />
       <div className="banner info">
         <span>🛒</span>
         <div className="grow small">

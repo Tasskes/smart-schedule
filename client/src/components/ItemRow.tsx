@@ -85,6 +85,7 @@ export function ItemRow({ item, now, onOpen, compact }: { item: DayItem; now?: n
             </span>
             {item.reward > 0 ? <span className="badge coin">🪙 {item.reward}</span> : null}
             {item.fixed && item.kind !== 'class' ? <span className="badge">📌 жёстко</span> : null}
+            {item.source === 'auto' ? <span className="badge accent">🤖 авто</span> : null}
             {running ? <span className="badge danger">⏱ идёт</span> : null}
             {item.actualMin ? <span className="badge ok">{fmtDur(item.actualMin)}</span> : null}
             {item.status === 'skipped' ? <span className="badge">пропущено</span> : null}

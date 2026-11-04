@@ -6,14 +6,50 @@ import { flushPendingChat } from './ai/chat';
 import { App } from './App';
 import { metaGet, metaSet, requestPersistentStorage } from './db/idb';
 import { scheduleAgendaUpload } from './db/ops';
-import { loadScheduleCache, refreshSchedule } from './db/schedule';
+import { loadScheduleCache, refreshSchedule, scheduleStore } from './db/schedule';
+import { backgroundAi, processFoodConsumption, processSpoilage, runAutoPlan } from './db/autoplan';
 import { seedIfNeeded } from './db/seed';
-import { get, loadAll } from './db/store';
+import { get, loadAll, onTablesChange } from './db/store';
 import { applyAppearance } from './theme';
 import { isDateStr } from './lib/dates';
 import { navStore } from './nav';
 import { onAfterSync, syncNow } from './sync';
 import './styles.css';
+
+/**
+ * iPhone: при открытой клавиатуре видимая часть экрана меньше окна. Подгоняем высоту оболочки
+ * под visualViewport, чтобы поле ввода оставалось над клавиатурой, а нижняя панель пряталась.
+ */
+function setupViewport() {
+  const root = document.documentElement;
+  const vv = window.visualViewport;
+  let focused = false;
+  const apply = () => {
+    const h = vv ? vv.height : window.innerHeight;
+    root.style.setProperty('--vv-h', `${Math.round(h)}px`);
+    root.style.setProperty('--vv-top', `${Math.round(vv ? vv.offsetTop : 0)}px`);
+    const keyboard = (vv ? window.innerHeight - vv.height > 120 : false) || (focused && !!vv && window.innerHeight - vv.height > 60);
+    root.classList.toggle('kb-open', keyboard);
+  };
+  vv?.addEventListener('resize', apply);
+  vv?.addEventListener('scroll', apply);
+  window.addEventListener('resize', apply);
+  window.addEventListener('orientationchange', () => setTimeout(apply, 300));
+  document.addEventListener('focusin', (e) => {
+    const t = e.target as HTMLElement | null;
+    focused = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    setTimeout(apply, 50);
+  });
+  document.addEventListener('focusout', () => {
+    focused = false;
+    setTimeout(apply, 50);
+  });
+  // если iOS всё-таки сдвинул страницу к полю ввода — возвращаем, оболочка сама подстроится
+  window.addEventListener('scroll', () => {
+    if (window.scrollY && !root.classList.contains('kb-open')) window.scrollTo(0, 0);
+  });
+  apply();
+}
 
 async function start() {
   await loadAll();
@@ -33,7 +69,36 @@ async function start() {
     authStore.set({ token: null });
   });
 
-  onAfterSync(() => scheduleAgendaUpload());
+  onAfterSync(() => {
+    scheduleAgendaUpload();
+    processFoodConsumption();
+    void backgroundAi();
+  });
+
+  // Автоматика: расписание по приоритетам, порча продуктов, списание съеденного
+  const safe = (fn: () => unknown) => () => {
+    try {
+      fn();
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+  processSpoilage();
+  safe(runAutoPlan)();
+  onTablesChange(['tasks', 'goals', 'events', 'variables', 'routines', 'marks', 'fridge', 'settings', 'weights'], safe(runAutoPlan), 1500);
+  onTablesChange(['food'], safe(processFoodConsumption), 800);
+  let schedVersion = scheduleStore.get().data?.version;
+  scheduleStore.subscribe(() => {
+    const v = scheduleStore.get().data?.version;
+    if (v !== schedVersion) {
+      schedVersion = v;
+      safe(runAutoPlan)();
+    }
+  });
+  setInterval(() => {
+    safe(processSpoilage)();
+    safe(runAutoPlan)();
+  }, 10 * 60000);
 
   const online = async () => {
     if (!hasServer()) return;
@@ -67,6 +132,8 @@ async function start() {
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   registerSW({ immediate: true });
 }
+
+setupViewport();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

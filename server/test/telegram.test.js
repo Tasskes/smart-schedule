@@ -115,3 +115,11 @@ test('normalization drops invalid actions and fixes times', () => {
   assert.equal(parseDurationMin('45 мин'), 45);
   assert.equal(parseDurationMin(''), 60);
 });
+
+test('tasks are not linked to goals unless the user asks', async () => {
+  const { asksForGoal } = await import('../src/inbox.js');
+  assert.equal(asksForGoal('сделать реферат'), false);
+  assert.equal(asksForGoal('выучить 50 слов, это к цели TOEFL'), true);
+  assert.equal(asksForGoal('для цели похудеть: купить кроссовки'), true);
+  assert.equal(asksForGoal('прицелиться'), false);
+});

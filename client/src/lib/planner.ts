@@ -182,7 +182,7 @@ export function createPlanner(st: PlanState) {
     const { wake, sleep } = wakeSleep(date);
     const all = dayItems(date);
     const isReplaceable = (it: DayItem) =>
-      !!opts.replaceAi && it.src === 'event' && it.source === 'ai' && it.status === 'planned' &&
+      !!opts.replaceAi && it.src === 'event' && (it.source === 'ai' || it.source === 'auto') && it.status === 'planned' &&
       (opts.fromMin == null || (timeToMin(it.start) ?? 0) >= opts.fromMin);
     const oldAi = all.filter(isReplaceable);
     const busy = all.filter((it) => !isReplaceable(it) && it.status !== 'skipped' && !it.overnight);

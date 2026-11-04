@@ -171,7 +171,7 @@ export function EventForm({ initial, date, onClose, item }: { initial?: Partial<
       toast('Добавлено');
     } else {
       // ручная правка дела ИИ — теперь оно «твоё» и не исчезнет при перегенерации
-      patch('events', initial!.id!, { ...fields, source: initial?.source === 'ai' ? 'manual' : initial?.source });
+      patch('events', initial!.id!, { ...fields, source: initial?.source === 'ai' || initial?.source === 'auto' ? 'manual' : initial?.source });
       toast('Сохранено');
     }
     onClose();

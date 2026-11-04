@@ -470,6 +470,22 @@ export function SettingsScreen() {
         </>
       ) : null}
 
+      <div className="section-title">Автоматика</div>
+      <div className="card">
+        <Toggle
+          label="Ставить задачи и цели в расписание автоматически"
+          hint="По приоритету и срокам, с лимитом {макс_фокус_в_день}; время на цели — по расчёту часов в неделю; поход в магазин — когда заканчивается еда"
+          checked={settings?.autoPlan !== false}
+          onChange={(v) => patch('settings', 'main', { autoPlan: v })}
+        />
+        <Toggle
+          label="Списывать съеденное из холодильника"
+          hint="Когда записываешь еду, совпадающий продукт в холодильнике уменьшается"
+          checked={settings?.fridgeAuto !== false}
+          onChange={(v) => patch('settings', 'main', { fridgeAuto: v })}
+        />
+      </div>
+
       <div className="section-title">О тебе (для ИИ)</div>
       <div className="card">
         <Field label="Что ИИ должен о тебе знать" hint="Учёба, работа, режим, что мешает, как тебе удобнее планировать">
