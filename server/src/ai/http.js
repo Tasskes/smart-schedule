@@ -13,7 +13,8 @@ export async function fetchWithTimeout(url, init, timeoutMs) {
     return await fetch(url, { ...init, signal: ctrl.signal });
   } catch (e) {
     if (e.name === 'AbortError') throw new ProviderError(504, 'Нейросеть не ответила вовремя', true);
-    throw new ProviderError(502, `Не удалось связаться с нейросетью: ${e.message}`, true);
+    const code = e?.cause?.code || e?.cause?.cause?.code;
+    throw new ProviderError(502, `Не удалось связаться с нейросетью: ${e.message}${code ? ` (${code})` : ''}`, true);
   } finally {
     clearTimeout(timer);
   }

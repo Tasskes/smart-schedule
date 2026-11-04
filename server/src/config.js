@@ -46,5 +46,7 @@ export const config = {
   telegram: {
     token: env.TELEGRAM_BOT_TOKEN || '',
     apiBase: (env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/$/, ''),
+    // необязательный HTTP(S)-прокси, если Telegram недоступен напрямую: http://user:pass@host:port
+    proxy: env.TELEGRAM_PROXY || '',
   },
 };
