@@ -1,13 +1,13 @@
 // Минимальная обёртка над IndexedDB: по хранилищу на таблицу + key/value «meta».
 export const TABLES = [
   'events', 'tasks', 'goals', 'variables', 'routines', 'marks', 'food', 'products',
-  'weights', 'fridge', 'rewards', 'ledger', 'chat', 'settings', 'prices',
+  'weights', 'fridge', 'rewards', 'ledger', 'chat', 'settings', 'prices', 'notes',
 ] as const;
 
 export type TableName = (typeof TABLES)[number];
 
 const DB_NAME = 'smart-schedule';
-const VERSION = 1;
+const VERSION = 2;
 let dbPromise: Promise<IDBDatabase> | null = null;
 let memoryFallback = false;
 const memMeta = new Map<string, unknown>();

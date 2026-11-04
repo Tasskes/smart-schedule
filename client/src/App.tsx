@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { authStore, netStore } from './api';
 import { Icon } from './components/Icon';
 import { afterDone } from './components/ItemRow';
 import { Toasts } from './components/ui';
 import { cancelTimer, runningTimer, stopTimer } from './db/ops';
-import { useTable, useVersion } from './db/store';
+import { useRecord, useTable, useVersion } from './db/store';
+import { NotesScreen } from './screens/NotesScreen';
+import { applyAppearance } from './theme';
 import { balance } from './lib/game';
 import { go, navStore, openSub, type Sub, type Tab } from './nav';
 import { BasketScreen } from './screens/BasketScreen';
@@ -41,6 +43,7 @@ const SUB_TITLES: Record<Exclude<Sub, null>, string> = {
   fridge: 'Холодильник',
   basket: 'Корзина',
   settings: 'Настройки',
+  notes: 'Заметки',
 };
 
 function TimerChip() {
@@ -87,11 +90,37 @@ function SyncDot() {
   );
 }
 
+function CoinPill() {
+  const ledger = useTable('ledger');
+  const bal = balance(ledger);
+  const prev = useRef(bal);
+  const [pop, setPop] = useState(false);
+  useEffect(() => {
+    if (bal > prev.current) {
+      setPop(true);
+      const t = setTimeout(() => setPop(false), 650);
+      prev.current = bal;
+      return () => clearTimeout(t);
+    }
+    prev.current = bal;
+  }, [bal]);
+  return (
+    <button className={`coin-pill ${pop ? 'pop' : ''}`} onClick={() => openSub('rewards')} aria-label="Монеты">
+      🪙 {bal}
+    </button>
+  );
+}
+
 export function App() {
   const { token, ready } = authStore.use();
   const nav = navStore.use();
-  const ledger = useTable('ledger');
   const net = netStore.use();
+  const settings = useRecord('settings', 'main');
+  const appearanceKey = JSON.stringify(settings?.appearance || null);
+  useEffect(() => {
+    applyAppearance(settings?.appearance);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appearanceKey]);
 
   if (!ready) return null;
   if (!token) return <LoginScreen />;
@@ -108,6 +137,7 @@ export function App() {
       fridge: <FridgeScreen />,
       basket: <BasketScreen />,
       settings: <SettingsScreen />,
+      notes: <NotesScreen />,
     }[nav.sub];
   } else {
     screen = {
@@ -130,9 +160,7 @@ export function App() {
         <h1>{title}</h1>
         {!net.online ? <span className="badge">офлайн</span> : null}
         <SyncDot />
-        <button className="coin-pill" onClick={() => openSub('rewards')} aria-label="Монеты">
-          🪙 {balance(ledger)}
-        </button>
+        <CoinPill />
       </header>
       <main className={`content ${nav.tab === 'chat' && !nav.sub ? 'chat-main' : ''}`}>{screen}</main>
       <TimerChip />

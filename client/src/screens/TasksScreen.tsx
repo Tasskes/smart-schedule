@@ -257,6 +257,7 @@ export function TasksScreen() {
                     </span>
                   ) : null}
                   {goal ? <span className="badge accent">🎯 {goal.title.slice(0, 24)}</span> : null}
+                  {t.source === 'telegram' ? <span className="badge">📨 TG</span> : null}
                 </div>
               </div>
             </button>

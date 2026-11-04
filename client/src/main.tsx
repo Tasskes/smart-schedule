@@ -8,7 +8,8 @@ import { metaGet, metaSet, requestPersistentStorage } from './db/idb';
 import { scheduleAgendaUpload } from './db/ops';
 import { loadScheduleCache, refreshSchedule } from './db/schedule';
 import { seedIfNeeded } from './db/seed';
-import { loadAll } from './db/store';
+import { get, loadAll } from './db/store';
+import { applyAppearance } from './theme';
 import { isDateStr } from './lib/dates';
 import { navStore } from './nav';
 import { onAfterSync, syncNow } from './sync';
@@ -16,6 +17,7 @@ import './styles.css';
 
 async function start() {
   await loadAll();
+  applyAppearance(get('settings', 'main')?.appearance);
   await loadScheduleCache();
   seedIfNeeded();
   const token = (await metaGet<string | null>('token')) ?? null;

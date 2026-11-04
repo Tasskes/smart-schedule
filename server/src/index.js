@@ -9,9 +9,10 @@ import {
   getSnapshot, onScheduleChanges, recentChanges, refreshSchedule, startSchedulePolling,
 } from './tulsu.js';
 import {
-  addSubscription, calendarPath, icsHandler, removeSubscription, saveAgenda, sendToAll,
+  addSubscription, calendarPath, icsHandler, notify, removeSubscription, saveAgenda,
   startReminderLoop, subscriptionCount, vapidPublicKey,
 } from './push.js';
+import { setTgNotify, startTelegramBot, tgStatus, unlinkTelegram } from './telegram.js';
 
 if (!config.password) {
   console.error('Не задан APP_PASSWORD (пароль для входа в приложение). Укажи его в .env');
@@ -66,9 +67,19 @@ app.post('/api/push/unsubscribe', (req, res) => {
   res.json({ ok: true });
 });
 app.post('/api/push/test', asyncRoute(async (req, res) => {
-  const sent = await sendToAll({ title: 'Проверка уведомлений', body: 'Если ты это видишь — всё работает 👍', tag: 'test', url: '/' });
+  const sent = await notify({ title: 'Проверка уведомлений', body: 'Если ты это видишь — всё работает 👍', tag: 'test', url: '/' });
   res.json({ ok: true, sent });
 }));
+
+app.get('/api/telegram', (req, res) => res.json(tgStatus()));
+app.post('/api/telegram/unlink', (req, res) => {
+  unlinkTelegram();
+  res.json(tgStatus());
+});
+app.post('/api/telegram/settings', (req, res) => {
+  if (typeof req.body?.notify === 'boolean') setTgNotify(req.body.notify);
+  res.json(tgStatus());
+});
 
 app.post('/api/agenda', (req, res) => {
   const agenda = saveAgenda(req.body || {});
@@ -110,11 +121,12 @@ app.use((err, req, res, next) => {
 onScheduleChanges(async (changes) => {
   const lines = changes.map((c) => c.text);
   const body = lines.slice(0, 4).join('\n') + (lines.length > 4 ? `\nи ещё ${lines.length - 4}…` : '');
-  await sendToAll({ title: '⚠️ Изменения в расписании', body, tag: 'schedule-changes', url: '/' });
+  await notify({ title: '⚠️ Изменения в расписании', body, tag: 'schedule-changes', url: '/' });
 });
 
 app.listen(config.port, () => {
   console.log(`Умный распорядок: http://localhost:${config.port}  (ИИ: ${aiInfo().provider}, группа ${config.tulsu.group})`);
   startSchedulePolling();
   startReminderLoop();
+  void startTelegramBot();
 });

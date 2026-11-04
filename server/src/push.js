@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { db, kv } from './db.js';
 import { classesForDates } from './tulsu.js';
 import { addDays, localDateStr, localTs, tzOffsetMin } from './time.js';
+import { esc, sendToOwner, tgNotifyEnabled } from './tgapi.js';
 
 let vapid = kv.get('vapid');
 if (!vapid) {
@@ -50,6 +51,19 @@ export async function sendToAll(payload) {
     }),
   );
   return ok;
+}
+
+/** Уведомление: web push на телефон + (если включено) дубль в Telegram */
+export async function notify(payload) {
+  let n = await sendToAll(payload);
+  if (tgNotifyEnabled()) {
+    try {
+      if (await sendToOwner(`🔔 <b>${esc(payload.title)}</b>${payload.body ? `\n${esc(payload.body)}` : ''}`)) n += 1;
+    } catch (e) {
+      console.warn('[tg] notify failed:', e.message);
+    }
+  }
+  return n;
 }
 
 function once(key) {
@@ -126,7 +140,7 @@ export async function reminderTick(now = Date.now()) {
     if (!once(`r|${it.uid}|${it.date}|${it.start}`)) continue;
     const title = it.remindMin > 0 ? `Через ${it.remindMin} мин: ${it.title}` : it.title;
     const body = [`${it.start}–${it.end}`, it.location, it.notes].filter(Boolean).join(' · ');
-    sent += await sendToAll({ title, body, tag: it.uid, url: `/?date=${it.date}` });
+    sent += await notify({ title, body, tag: it.uid, url: `/?date=${it.date}` });
   }
 
   // Утренняя сводка
@@ -140,7 +154,7 @@ export async function reminderTick(now = Date.now()) {
       const parts = [];
       parts.push(classes.length ? `Пар: ${classes.length} (первая в ${classes[0].start})` : 'Пар нет');
       if (rest.length) parts.push(`Дел в плане: ${rest.length}. Первое: ${rest[0].start} ${rest[0].title}`);
-      sent += await sendToAll({ title: 'Доброе утро! План на сегодня', body: parts.join('. '), tag: `digest-${today}`, url: '/' });
+      sent += await notify({ title: 'Доброе утро! План на сегодня', body: parts.join('. '), tag: `digest-${today}`, url: '/' });
     }
   }
   sentCleanup.run(now - 4 * 86400000);

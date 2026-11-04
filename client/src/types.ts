@@ -48,6 +48,7 @@ export interface TaskRec extends Base {
   doneAt?: number | null;
   actualMin?: number | null;
   createdAt: number;
+  source?: 'telegram' | 'app';
 }
 
 export interface GoalRec extends Base {
@@ -161,6 +162,24 @@ export interface PriceRec extends Base {
   checkedAt?: number;
 }
 
+export interface NoteRec extends Base {
+  title?: string;
+  text: string;
+  source: 'telegram' | 'app';
+  from?: string | null;
+  createdAt: number;
+  done?: boolean;
+}
+
+export type ThemeName = 'classic' | 'pastel' | 'neon';
+export type ThemeMode = 'auto' | 'light' | 'dark';
+
+export interface Appearance {
+  theme: ThemeName;
+  mode: ThemeMode;
+  accent?: string | null;
+}
+
 export type ChatMode = 'chat' | 'plan' | 'tutor' | 'review' | 'decompose';
 
 export interface ChatRec extends Base {
@@ -239,6 +258,7 @@ export interface SettingsRec extends Base {
   nutrition: NutritionProfile;
   foodPrefs?: string;
   budgetWeek?: number | null;
+  appearance?: Appearance;
   createdAt: number;
 }
 

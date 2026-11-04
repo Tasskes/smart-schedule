@@ -129,6 +129,25 @@ export async function mockComplete({ messages }) {
       };
       break;
     }
+    case 'tg': {
+      const actions = [];
+      if (/съел|выпил|на завтрак|на обед|на ужин/.test(userText)) {
+        actions.push({ type: 'log_food', items: [{ name: 'гречка', grams: 200, kcal: 220, p: 8, f: 2, c: 42 }] });
+      } else if (/купил/.test(userText)) {
+        actions.push({ type: 'add_fridge', items: [{ name: 'курица', amount: 1, unit: 'кг' }] });
+      } else if (/репетитор|давай в|\d{1,2}:\d{2}/.test(userText)) {
+        actions.push({ type: 'add_event', date: data.days?.[1]?.date || data.today, start: '18:00', title: 'Репетитор', kind: 'tutor' });
+      } else if (/идея|заметк/.test(userText)) {
+        actions.push({ type: 'add_note', title: 'Идея', text: userText.trim() });
+      } else if (/что у меня/.test(userText)) {
+        out = { reply: `Завтра: ${(data.days?.[1]?.busy || []).join('; ') || 'ничего'}`, actions: [] };
+        break;
+      } else {
+        actions.push({ type: 'add_task', title: userText.trim().slice(0, 60) || 'Задача', category: 'study', estimateMin: 60, complexity: 2 });
+      }
+      out = { reply: 'Принял!', actions };
+      break;
+    }
     case 'decompose':
       out = {
         reply: 'Разбил цель на шаги (тест).',

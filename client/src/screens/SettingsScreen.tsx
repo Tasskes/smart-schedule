@@ -6,6 +6,157 @@ import { refreshSchedule, useSchedule } from '../db/schedule';
 import { exportAll, get, importAll, patch, useRecord } from '../db/store';
 import { disablePush, enablePush, isIOS, isStandalone, pushState } from '../push';
 import { syncNow, syncStore } from '../sync';
+import { ACCENTS, applyAppearance, DEFAULT_APPEARANCE, THEMES } from '../theme';
+import { Seg, Toggle } from '../components/ui';
+import type { Appearance, ThemeMode } from '../types';
+
+function AppearanceCard() {
+  const settings = useRecord('settings', 'main');
+  const ap: Appearance = { ...DEFAULT_APPEARANCE, ...(settings?.appearance || {}) };
+  const set = (next: Partial<Appearance>) => {
+    const value = { ...ap, ...next };
+    applyAppearance(value);
+    patch('settings', 'main', { appearance: value });
+  };
+  return (
+    <div className="card">
+      <div className="theme-tiles">
+        {THEMES.map((t) => (
+          <button key={t.id} className={`theme-tile ${ap.theme === t.id ? 'active' : ''}`} onClick={() => set({ theme: t.id })}>
+            <div className="pv" style={{ background: t.preview.bg }}>
+              <i style={{ background: t.preview.card, width: '100%', height: 18 }} />
+              <i style={{ background: t.preview.accent, width: '70%' }} />
+              <i style={{ background: t.preview.text, opacity: 0.25, width: '45%' }} />
+            </div>
+            <b>{t.title}</b>
+            <span className="tiny muted">{t.hint}</span>
+          </button>
+        ))}
+      </div>
+      <div className="label" style={{ margin: '14px 0 6px' }}>Режим</div>
+      {ap.theme === 'neon' ? (
+        <div className="tiny muted">Неон всегда тёмный</div>
+      ) : (
+        <Seg<ThemeMode>
+          value={ap.mode}
+          onChange={(mode) => set({ mode })}
+          options={[
+            { v: 'auto', label: 'Как в iPhone' },
+            { v: 'light', label: 'Светлая' },
+            { v: 'dark', label: 'Тёмная' },
+          ]}
+        />
+      )}
+      <div className="label" style={{ margin: '14px 0 8px' }}>Акцентный цвет</div>
+      <div className="accent-dots">
+        <button className={`auto ${!ap.accent ? 'active' : ''}`} onClick={() => set({ accent: null })} aria-label="Как в теме" title="Как в теме" />
+        {ACCENTS.map((c) => (
+          <button key={c} className={ap.accent === c ? 'active' : ''} style={{ background: c }} onClick={() => set({ accent: c })} aria-label={c} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface TgStatus {
+  configured: boolean;
+  username: string | null;
+  linked: boolean;
+  ownerName: string | null;
+  startLink: string | null;
+  notify: boolean;
+  error: string | null;
+}
+
+function TelegramCard() {
+  const [st, setSt] = useState<TgStatus | null>(null);
+  const [err, setErr] = useState('');
+  const load = () =>
+    api<TgStatus>('/api/telegram')
+      .then((s) => {
+        setSt(s);
+        setErr('');
+      })
+      .catch((e) => setErr((e as Error).message));
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (err) return <div className="card small err-text">{err}</div>;
+  if (!st) return <div className="card small muted">Загружаю…</div>;
+  if (!st.configured) {
+    return (
+      <div className="card small">
+        <div>
+          Бот ещё не создан. Это займёт 2 минуты:
+          <ol style={{ margin: '8px 0', paddingLeft: 18 }}>
+            <li>
+              В Telegram открой <b>@BotFather</b> → <span className="kbd">/newbot</span> → придумай имя и логин бота (должен заканчиваться на <i>bot</i>).
+            </li>
+            <li>Скопируй токен, который пришлёт BotFather.</li>
+            <li>
+              На сервере добавь в файл <span className="kbd">.env</span> строку <span className="kbd">TELEGRAM_BOT_TOKEN=токен</span> и выполни{' '}
+              <span className="kbd">docker compose up -d</span>.
+            </li>
+          </ol>
+          Потом вернись сюда и нажми «Подключить».
+        </div>
+        <button className="btn small secondary" onClick={load}>
+          Проверить снова
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="card small">
+      {st.linked ? (
+        <>
+          <div className="row between">
+            <span>Бот {st.username ? `@${st.username}` : ''}</span>
+            <b style={{ color: 'var(--ok)' }}>подключён{st.ownerName ? ` · ${st.ownerName}` : ''}</b>
+          </div>
+          <div className="tiny muted" style={{ margin: '6px 0' }}>
+            Пиши или пересылай боту задачи, заметки, сообщения репетитора, что съел и что купил — ИИ сам разложит это по приложению. Команды: /today, /tomorrow, /tasks.
+          </div>
+          <Toggle
+            label="Дублировать напоминания в Telegram"
+            hint="Пары, дела, утренняя сводка и изменения в расписании"
+            checked={st.notify}
+            onChange={(v) => api<TgStatus>('/api/telegram/settings', { body: { notify: v } }).then(setSt).catch((e) => toast((e as Error).message))}
+          />
+          <button
+            className="btn small danger"
+            onClick={() => {
+              if (!confirm('Отключить бота от приложения?')) return;
+              api<TgStatus>('/api/telegram/unlink', { body: {} }).then(setSt);
+            }}
+          >
+            Отключить
+          </button>
+        </>
+      ) : (
+        <>
+          <div>Бот {st.username ? <b>@{st.username}</b> : ''} готов. Нажми «Подключить» — откроется Telegram, там нажми «Запустить» (Start).</div>
+          {st.error ? <div className="err-text" style={{ marginTop: 6 }}>Связь с Telegram: {st.error}</div> : null}
+          <div className="grid-2" style={{ marginTop: 10 }}>
+            {st.startLink ? (
+              <a className="btn small" href={st.startLink} target="_blank" rel="noreferrer">
+                Подключить
+              </a>
+            ) : (
+              <button className="btn small" disabled>
+                Подключить
+              </button>
+            )}
+            <button className="btn small secondary" onClick={load}>
+              Я нажал Start
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function fmtTime(ts?: number | null) {
   return ts ? new Date(ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -55,6 +206,9 @@ export function SettingsScreen() {
 
   return (
     <>
+      <div className="section-title">Оформление</div>
+      <AppearanceCard />
+
       <div className="section-title">Сервер</div>
       <div className="card small">
         {hasServer() ? (
@@ -160,6 +314,9 @@ export function SettingsScreen() {
               </>
             )}
           </div>
+
+          <div className="section-title">Telegram-бот</div>
+          <TelegramCard />
 
           <div className="section-title">Календарь iPhone (работает и без интернета)</div>
           <div className="card small">

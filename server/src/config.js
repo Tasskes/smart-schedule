@@ -43,4 +43,8 @@ export const config = {
     },
   },
   vapidSubject: env.VAPID_SUBJECT || 'mailto:smart-schedule@example.com',
+  telegram: {
+    token: env.TELEGRAM_BOT_TOKEN || '',
+    apiBase: (env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/$/, ''),
+  },
 };

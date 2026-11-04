@@ -6,6 +6,7 @@ import { openSub, type Sub } from '../nav';
 const ITEMS: { sub: Sub; emoji: string; title: string; hint: string }[] = [
   { sub: 'goals', emoji: '🎯', title: 'Цели', hint: '5 лет → год → полгода → квартал → месяц → неделя' },
   { sub: 'tasks', emoji: '✅', title: 'Задачи', hint: 'Оценка объёма и времени ИИ, дедлайны' },
+  { sub: 'notes', emoji: '📥', title: 'Заметки и входящие', hint: 'Мысли, идеи и всё, что пришло из Telegram' },
   { sub: 'variables', emoji: '🧮', title: 'Переменные', hint: 'Постоянные значения и формулы для распорядка' },
   { sub: 'routines', emoji: '🔁', title: 'Распорядок', hint: 'Подъём, дорога, отбой — то, что повторяется' },
   { sub: 'rewards', emoji: '🪙', title: 'Монеты и награды', hint: 'Баланс, уровень, магазин наград' },
@@ -16,6 +17,8 @@ const ITEMS: { sub: Sub; emoji: string; title: string; hint: string }[] = [
 
 export function MoreScreen() {
   const ledger = useTable('ledger');
+  const notes = useTable('notes');
+  const fresh = notes.filter((n) => !n.done).length;
   return (
     <div className="list">
       {ITEMS.map((it) => (
@@ -25,6 +28,7 @@ export function MoreScreen() {
             <div style={{ fontWeight: 600 }}>
               {it.title}
               {it.sub === 'rewards' ? <span className="badge coin" style={{ marginLeft: 6 }}>🪙 {balance(ledger)}</span> : null}
+              {it.sub === 'notes' && fresh ? <span className="badge accent" style={{ marginLeft: 6 }}>{fresh}</span> : null}
             </div>
             <div className="tiny muted">{it.hint}</div>
           </div>

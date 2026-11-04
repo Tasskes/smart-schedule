@@ -3,7 +3,7 @@ import { todayStr } from './lib/dates';
 import type { ChatMode } from './types';
 
 export type Tab = 'today' | 'week' | 'chat' | 'food' | 'more';
-export type Sub = null | 'goals' | 'tasks' | 'variables' | 'routines' | 'rewards' | 'fridge' | 'basket' | 'settings';
+export type Sub = null | 'goals' | 'tasks' | 'variables' | 'routines' | 'rewards' | 'fridge' | 'basket' | 'settings' | 'notes';
 
 export interface ChatIntent {
   mode: ChatMode;
