@@ -85,6 +85,35 @@ export function setTransport(fn) {
   transport = fn;
 }
 
+// Скачивание файлов (фото, голосовые) из Telegram — через тот же прокси, что и API
+let downloader = async (fileId) => {
+  const f = await tg('getFile', { file_id: fileId });
+  if (!f?.file_path) throw new Error('Telegram не отдал файл');
+  const { doFetch, dispatcher } = await fetcher();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const res = await doFetch(`${config.telegram.apiBase}/file/bot${config.telegram.token}/${f.file_path}`, {
+      signal: ctrl.signal,
+      ...(dispatcher ? { dispatcher } : {}),
+    });
+    if (!res.ok) throw new Error(`файл не скачался (${res.status})`);
+    return Buffer.from(await res.arrayBuffer());
+  } catch (e) {
+    throw new Error(e.message.startsWith('файл') ? e.message : `файл не скачался: ${netErrorText(e)}`);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+export function setDownloader(fn) {
+  downloader = fn;
+}
+
+export function tgDownload(fileId) {
+  return downloader(fileId);
+}
+
 export function tg(method, params = {}, timeoutMs = 20000) {
   return transport(method, params, timeoutMs);
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { estimateTask, type Estimate } from '../ai/tools';
 import { Icon } from '../components/Icon';
+import { Attachments } from '../components/Attachments';
 import { Empty, Field, NumInput, Seg, Sheet, toast } from '../components/ui';
 import { completeTask } from '../db/ops';
 import { patch, put, remove, useTable } from '../db/store';
@@ -112,8 +113,20 @@ function TaskSheet({ initial, onClose }: { initial?: Partial<TaskRec>; onClose: 
             ))}
         </select>
       </Field>
+      {initial?.attachments?.length ? (
+        <>
+          <div className="label" style={{ marginBottom: 6 }}>📎 Вложения из переписки</div>
+          <Attachments list={initial.attachments} />
+        </>
+      ) : null}
       <Field label="Контекст" hint="Объём, требования, что уже сделано — влияет на оценку и план">
-        <textarea className="textarea" value={context} onChange={(e) => setContext(e.target.value)} placeholder="25 страниц, 3 главы, нужен список литературы…" />
+        <textarea
+          className="textarea"
+          style={{ minHeight: context.length > 400 ? 220 : undefined }}
+          value={context}
+          onChange={(e) => setContext(e.target.value)}
+          placeholder="25 страниц, 3 главы, нужен список литературы…"
+        />
       </Field>
 
       <div className="card flat" style={{ background: 'var(--card-2)' }}>
@@ -258,6 +271,7 @@ export function TasksScreen() {
                   ) : null}
                   {goal ? <span className="badge accent">🎯 {goal.title.slice(0, 24)}</span> : null}
                   {t.source === 'telegram' ? <span className="badge">📨 из бота</span> : null}
+                  {t.attachments?.length ? <span className="badge">📎 {t.attachments.length}</span> : null}
                 </div>
               </div>
             </button>

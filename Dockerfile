@@ -9,6 +9,8 @@ RUN npm run build
 # --- сервер ---
 FROM node:22-slim
 ENV NODE_ENV=production
+# ffmpeg — чтобы расшифровывать длинные голосовые и аудиофайлы (режем на куски для SpeechKit)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund

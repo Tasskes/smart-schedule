@@ -43,6 +43,13 @@ export const config = {
     },
   },
   vapidSubject: env.VAPID_SUBJECT || 'mailto:smart-schedule@example.com',
+  media: {
+    // Голосовые → текст (Yandex SpeechKit) и текст с картинок (Yandex Vision OCR); ключ и каталог — те же, что у YandexGPT
+    sttUrl: env.SPEECHKIT_URL || 'https://stt.api.cloud.yandex.net/speech/v1/stt:recognize',
+    ocrUrl: env.VISION_OCR_URL || 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText',
+    // Сколько ждать следующих пересланных сообщений, прежде чем собрать переписку в одну задачу
+    debounceMs: Number(env.INBOX_DEBOUNCE_MS || 3500),
+  },
   vk: {
     token: env.VK_GROUP_TOKEN || '',
     groupId: String(env.VK_GROUP_ID || '').replace(/^(club|public)/, '').trim(),

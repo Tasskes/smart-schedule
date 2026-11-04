@@ -124,7 +124,7 @@ export function undoBatch(batchId) {
 const kcalLine = (items) => items.reduce((s, i) => s + i.kcal, 0);
 
 /** Создаём записи (они приедут в телефон при синхронизации) и готовим текст ответа */
-export function applyTgActions(actions, { original = '', from = '' } = {}) {
+export function applyTgActions(actions, { original = '', from = '', attachments = [], maxContext = 2000 } = {}) {
   const batchId = crypto.randomBytes(6).toString('hex');
   const now = Date.now();
   const today = localDateStr();
@@ -140,7 +140,8 @@ export function applyTgActions(actions, { original = '', from = '' } = {}) {
         data: {
           title: a.title, category: a.category, deadline: a.deadline, priority: a.priority, estimateMin: a.estimateMin,
           complexity: a.complexity, reward: a.reward, goalId: a.goalId, status: 'todo', createdAt: now, source: 'telegram',
-          context: [a.context, original && original !== a.title ? origin : ''].filter(Boolean).join('\n\n').slice(0, 2000),
+          context: [a.context, original && original !== a.title ? origin : ''].filter(Boolean).join('\n\n').slice(0, maxContext),
+          ...(attachments.length ? { attachments } : {}),
         },
       });
       const parts = [`✅ Задача: <b>${esc(a.title)}</b>`];
@@ -173,7 +174,10 @@ export function applyTgActions(actions, { original = '', from = '' } = {}) {
       for (const it of a.items) list.push({ tbl: 'fridge', data: { name: it.name, amount: it.amount, unit: it.unit, expires: it.expires } });
       lines.push(`🧊 В холодильник: ${a.items.map((i) => esc(i.name) + (i.amount ? ` ${i.amount} ${i.unit}`.trimEnd() : '')).join(', ')}`);
     } else if (a.type === 'add_note') {
-      list.push({ tbl: 'notes', data: { title: a.title, text: a.text, source: 'telegram', from: from || null, createdAt: now } });
+      list.push({
+        tbl: 'notes',
+        data: { title: a.title, text: a.text.slice(0, Math.max(4000, maxContext)), source: 'telegram', from: from || null, createdAt: now, ...(attachments.length ? { attachments } : {}) },
+      });
       lines.push(`📝 Заметка: <b>${esc(a.title)}</b>`);
     }
   }

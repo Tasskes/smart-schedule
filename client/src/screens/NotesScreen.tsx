@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, hasServer } from '../api';
+import { Attachments } from '../components/Attachments';
 import { Empty, Seg, toast } from '../components/ui';
 import { patch, put, remove, useTable } from '../db/store';
 import { openChat, openSub } from '../nav';
@@ -16,6 +17,7 @@ function NoteCard({ n }: { n: NoteRec }) {
     put('tasks', {
       title: (n.title || n.text).split('\n')[0].slice(0, 120),
       context: n.text,
+      attachments: n.attachments,
       category: 'other',
       status: 'todo',
       priority: 2,
@@ -35,6 +37,11 @@ function NoteCard({ n }: { n: NoteRec }) {
         <span className="badge">{n.source === 'telegram' ? '📨 из мессенджера' : '✍️ своя'}</span>
         {n.from ? <span className="badge">от: {n.from}</span> : null}
       </div>
+      {n.attachments?.length ? (
+        <div style={{ marginTop: 8 }}>
+          <Attachments list={n.attachments} />
+        </div>
+      ) : null}
       {n.text && n.text !== n.title ? (
         <div className={`note-text ${long && !open ? 'clamp' : ''}`} onClick={() => setOpen(!open)}>
           {n.text}

@@ -108,3 +108,11 @@ export async function loadStatus() {
     return null;
   }
 }
+
+/** Файл с сервера (картинки-вложения) — с авторизацией, как blob */
+export async function apiBlob(path: string): Promise<Blob> {
+  const token = authStore.get().token;
+  const res = await fetch(path, { headers: token && token !== LOCAL_TOKEN ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new ApiError(res.status, 'Файл недоступен');
+  return res.blob();
+}

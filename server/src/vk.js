@@ -1,10 +1,11 @@
 import crypto from 'node:crypto';
 import { config } from './config.js';
 import { kv } from './db.js';
-import { helpText, htmlToPlain, planText, processInbox, tasksText } from './inbox.js';
-import { addDays, localDateStr } from './time.js';
+import { buildConversation, hasMedia, plainText } from './convo.js';
+import { helpText, htmlToPlain, planText, processConversation, processInbox, tasksText } from './inbox.js';
+import { addDays, localDateStr, localTimeStr } from './time.js';
 import { undoBatch } from './tgactions.js';
-import { vk, vkEnabled, vkLongPoll, vkOwner, vkSend } from './vkapi.js';
+import { vk, vkEnabled, vkFetchFile, vkLongPoll, vkOwner, vkSend } from './vkapi.js';
 
 // Бот сообщества ВКонтакте (Bots Long Poll API): та же «входящая» обработка, что и в Telegram.
 
@@ -62,8 +63,45 @@ async function userNames(ids) {
   }
 }
 
-/** Собираем текст из сообщения и пересланных: «[Анна Петровна]: давай в чт в 18» */
-async function collectText(m) {
+function photoUrl(photo) {
+  if (photo?.orig_photo?.url) return photo.orig_photo.url;
+  const sizes = photo?.sizes || [];
+  if (!sizes.length) return null;
+  return sizes.reduce((a, b) => ((b.width || 0) * (b.height || 0) > (a.width || 0) * (a.height || 0) ? b : a)).url || null;
+}
+
+const fetchFile = (url, fallbackMime) => async () => {
+  if (!url) throw new Error('нет ссылки на файл');
+  const { buf, mime } = await vkFetchFile(url);
+  return { buf, mime: /^(image|audio|video)\//.test(mime) ? mime : fallbackMime };
+};
+
+function vkMedia(msg) {
+  const media = [];
+  for (const a of msg.attachments || []) {
+    if (a.type === 'photo') {
+      const url = photoUrl(a.photo);
+      if (url) media.push({ kind: 'image', fetch: fetchFile(url, 'image/jpeg') });
+    } else if (a.type === 'audio_message') {
+      const am = a.audio_message || {};
+      media.push({
+        kind: 'voice',
+        duration: am.duration || 0,
+        transcript: am.transcript_state === 'done' || am.transcript ? am.transcript || '' : '',
+        fetch: fetchFile(am.link_ogg || am.link_mp3, am.link_ogg ? 'audio/ogg' : 'audio/mpeg'),
+      });
+    } else if (a.type === 'doc') {
+      const d = a.doc || {};
+      const ext = String(d.ext || '').toLowerCase();
+      if (/^(jpe?g|png|webp|gif)$/.test(ext)) media.push({ kind: 'image', fetch: fetchFile(d.url, `image/${ext === 'jpg' ? 'jpeg' : ext}`) });
+      else media.push({ kind: 'doc', name: d.title || '' });
+    }
+  }
+  return media;
+}
+
+/** Сообщение и пересланные в нём → элементы переписки: «[Анна Петровна, 18:02]: …» */
+async function collectItems(m) {
   const fwd = [];
   const walk = (list) => {
     for (const f of list || []) {
@@ -73,23 +111,16 @@ async function collectText(m) {
   };
   walk(m.fwd_messages);
   if (m.reply_message) fwd.push(m.reply_message);
-  const voice = (msg) => msg.attachments?.find((a) => a.type === 'audio_message')?.audio_message?.transcript || '';
-  const own = String(m.text || '').trim() || voice(m);
-  if (!fwd.length) return { text: own, from: '' };
   const names = await userNames(fwd.map((f) => f.from_id));
-  const parts = fwd
-    .map((f) => {
-      const t = String(f.text || '').trim() || voice(f);
-      if (!t) return '';
-      const who = f.from_id > 0 ? names.get(f.from_id) || 'собеседник' : 'сообщество';
-      return `[${who}]: ${t}`;
-    })
-    .filter(Boolean);
+  const who = (f) => (f.from_id === m.from_id ? 'Я' : f.from_id > 0 ? names.get(f.from_id) || 'собеседник' : 'сообщество');
+  const time = (d) => (d ? localTimeStr(d * 1000) : null);
+  const own = { author: 'Я', time: time(m.date), text: String(m.text || '').trim(), media: vkMedia(m) };
+  const items = [
+    ...(own.text || own.media.length ? [own] : []),
+    ...fwd.map((f) => ({ author: who(f), time: time(f.date), text: String(f.text || '').trim(), media: vkMedia(f) })),
+  ];
   const first = fwd.find((f) => f.from_id > 0 && f.from_id !== m.from_id);
-  return {
-    text: [own, ...parts].filter(Boolean).join('\n'),
-    from: first ? names.get(first.from_id) || '' : '',
-  };
+  return { items, forwards: fwd.length, from: first ? names.get(first.from_id) || '' : '' };
 }
 
 function command(text) {
@@ -130,11 +161,35 @@ export async function handleVkUpdate(u) {
   if (cmd === 'tasks') return vkSend(userId, htmlToPlain(tasksText()));
   if (cmd === 'help') return vkSend(userId, HELP);
 
-  const { text: full, from } = await collectText(m);
-  if (!full) return vkSend(userId, 'Пока понимаю только текст и пересланные сообщения 🙂');
+  const { items, forwards, from } = await collectItems(m);
+  if (!items.length) return vkSend(userId, 'Пока не понимаю такое сообщение 🙂');
+  const undo = (res) => (res.batchId ? { keyboard: undoKeyboard(res.batchId) } : {});
   vk('messages.setActivity', { peer_id: userId, type: 'typing' }).catch(() => undefined);
-  const res = await processInbox(full, from);
-  return vkSend(userId, htmlToPlain(res.text || 'Готово'), res.batchId ? { keyboard: undoKeyboard(res.batchId) } : {});
+
+  // Текст без вложений (своё сообщение или одно пересланное) — как обычно: задача, событие, еда…
+  if (!hasMedia(items) && forwards <= 1) {
+    const text = items.map((it) => (it.author === 'Я' ? it.text : `[${it.author}]: ${it.text}`)).filter((t) => t.trim()).join('\n');
+    const res = await processInbox(text, from);
+    return vkSend(userId, htmlToPlain(res.text || 'Готово'), undo(res));
+  }
+
+  if (forwards > 1 || hasMedia(items)) {
+    await vkSend(userId, forwards > 1 ? `⏳ Собираю переписку (${forwards})…` : '⏳ Разбираю вложение…').catch(() => undefined);
+  }
+  const convo = await buildConversation(items);
+
+  // Своё сообщение с голосовым или картинкой — разбираем как обычный текст
+  if (forwards === 0) {
+    const text = plainText(items, convo);
+    const problems = convo.problems.map((p) => `⚠️ ${p}`);
+    if (!text) return vkSend(userId, ['Не получилось ничего разобрать.', ...problems].join('\n'));
+    const res = await processInbox(text, '', { attachments: convo.attachments });
+    return vkSend(userId, [htmlToPlain(res.text || 'Готово'), ...problems].join('\n'), undo(res));
+  }
+
+  // Переписка (несколько пересланных или с вложениями) → одна задача
+  const res = await processConversation(convo, { from });
+  return vkSend(userId, htmlToPlain(res.text || 'Готово'), undo(res));
 }
 
 async function handleVkEvent(ev) {

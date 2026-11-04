@@ -38,14 +38,15 @@ export const INBOX_SYSTEM = `Ты — «Входящие» личного пла
 export function helpText(style = 'tg') {
   const cmds =
     style === 'vk'
-      ? 'Команды — просто напиши слово: «сегодня», «завтра», «задачи», «помощь».'
-      : '/today — план на сегодня, /tomorrow — на завтра, /tasks — открытые задачи';
+      ? 'Команды — просто напиши слово: «сегодня», «завтра», «задачи», «помощь». Перешли сразу несколько сообщений — соберу их в одну задачу.'
+      : '«📥 Собрать задачу» (/collect) — пересылай переписку с картинками и голосовыми, потом «✅ Готово»: получится одна задача.\n/today — план на сегодня, /tomorrow — на завтра, /tasks — открытые задачи';
   return [
     '<b>Что я умею</b>',
     '• Пиши задачи как есть: «реферат по праву до пятницы», «позвонить в деканат»',
     '• Пересылай сообщения репетитора — поставлю занятие в расписание',
     '• «Съел гречку 200 г и котлету» — запишу в дневник питания',
     '• «Купил курицу 1 кг и 10 яиц» — добавлю в холодильник',
+    '• Голосовые расшифрую, текст с картинок распознаю',
     '• Идеи и заметки — сохраню в «Заметки»',
     '• Спрашивай: «что у меня завтра?»',
     '',
@@ -90,13 +91,13 @@ export function buildInboxContext(refs) {
   };
 }
 
-function saveAsNote(text, from, reason) {
-  const res = applyTgActions([{ type: 'add_note', title: text.split('\n')[0].slice(0, 80), text }], { original: text, from });
+function saveAsNote(text, from, reason, attachments = []) {
+  const res = applyTgActions([{ type: 'add_note', title: text.split('\n')[0].slice(0, 80), text }], { original: text, from, attachments, maxContext: 8000 });
   return { text: `📝 ${reason}\n${res.lines.join('\n')}`, batchId: res.batchId };
 }
 
-export async function processInbox(text, from = '') {
-  if (!aiInfo().configured) return saveAsNote(text, from, 'Нейросеть не настроена — сохранил как заметку.');
+export async function processInbox(text, from = '', { attachments = [] } = {}) {
+  if (!aiInfo().configured) return saveAsNote(text, from, 'Нейросеть не настроена — сохранил как заметку.', attachments);
   const refs = new RefMap();
   const ctx = buildInboxContext(refs);
   const tutorVar = listRecords('variables').find((v) => v.name === 'репетитор');
@@ -113,15 +114,15 @@ export async function processInbox(text, from = '') {
     });
     parsed = parseJsonLoose(out.text);
   } catch (e) {
-    return saveAsNote(text, from, `Нейросеть сейчас недоступна (${e.message}). Сохранил как заметку — разберёшь в приложении.`);
+    return saveAsNote(text, from, `Нейросеть сейчас недоступна (${e.message}). Сохранил как заметку — разберёшь в приложении.`, attachments);
   }
   const actions = normalizeTgActions(parsed?.actions, refs, { tutorMin: parseDurationMin(tutorVar?.expr, 60) });
   const reply = typeof parsed?.reply === 'string' ? parsed.reply.trim() : '';
   if (!actions.length) {
     if (reply) return { text: esc(reply), batchId: null };
-    return saveAsNote(text, from, 'Не понял, что с этим сделать, — сохранил как заметку.');
+    return saveAsNote(text, from, 'Не понял, что с этим сделать, — сохранил как заметку.', attachments);
   }
-  const res = applyTgActions(actions, { original: text, from });
+  const res = applyTgActions(actions, { original: text, from, attachments, maxContext: attachments.length ? 8000 : 2000 });
   return { text: [reply ? esc(reply) : null, ...res.lines].filter(Boolean).join('\n'), batchId: res.batchId };
 }
 
@@ -139,6 +140,62 @@ export function tasksText() {
     .slice(0, 15);
   if (!tasks.length) return 'Открытых задач нет 🎉';
   return `<b>Открытые задачи</b>\n${tasks.map((t) => `• ${esc(t.title)}${t.deadline ? ` — до ${fmtDay(t.deadline)}` : ''}`).join('\n')}`;
+}
+
+const CONVO_INSTRUCTION = `[РЕЖИМ: ПЕРЕПИСКА → ОДНА ЗАДАЧА] Выше — пересланная переписка: сообщения, расшифровки голосовых (🎤) и текст с картинок (🖼). Сформируй из неё РОВНО ОДНУ задачу (add_task):
+- title — коротко и конкретно, что нужно сделать (до 80 символов);
+- deadline — если в переписке есть срок; priority — по срочности;
+- estimateMin, complexity, reward — реалистично по объёму работы;
+- context — структурированная выжимка по-русски с пунктами «Кто просит», «Что сделать», «Детали и требования», «Сроки», «Материалы и ссылки». Не теряй важное из голосовых и картинок.
+Других действий не добавляй. reply — одно предложение: о чём задача.`;
+
+const plural = (n, one, few, many) => {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+};
+
+/** Пересланная переписка (с картинками и голосовыми) → одна задача */
+export async function processConversation(convo, { from = '' } = {}) {
+  const { transcript, attachments, problems, stats } = convo;
+  const parts = [`${stats.messages} ${plural(stats.messages, 'сообщение', 'сообщения', 'сообщений')}`];
+  if (stats.voices) parts.push(`${stats.voices} ${plural(stats.voices, 'голосовое', 'голосовых', 'голосовых')}`);
+  if (stats.images) parts.push(`${stats.images} ${plural(stats.images, 'картинка', 'картинки', 'картинок')}`);
+  const head = `📥 Переписка: ${parts.join(', ')}`;
+  const problemLines = problems.map((p) => `⚠️ ${esc(p)}`);
+  const full = transcript.slice(0, 12000);
+  if (!full.trim()) {
+    return { text: [head, 'Не нашёл в переписке ни текста, ни расшифровок.', ...problemLines].join('\n'), batchId: null };
+  }
+
+  let task = null;
+  let reply = '';
+  if (aiInfo().configured) {
+    try {
+      const refs = new RefMap();
+      const ctx = buildInboxContext(refs);
+      const out = await complete({
+        system: INBOX_SYSTEM,
+        messages: [{ role: 'user', content: `${full}\n\n${CONVO_INSTRUCTION}\n\n<данные>\n${JSON.stringify({ mode: 'conversation', ...ctx })}\n</данные>` }],
+        json: true,
+        tier: 'smart',
+        temperature: 0.2,
+        maxTokens: 2500,
+      });
+      const parsed = parseJsonLoose(out.text);
+      reply = typeof parsed?.reply === 'string' ? parsed.reply.trim() : '';
+      task = normalizeTgActions(parsed?.actions, refs).find((a) => a.type === 'add_task') || null;
+    } catch (e) {
+      problemLines.push(`⚠️ Нейросеть недоступна (${esc(e.message)}) — задачу собрал без неё`);
+    }
+  }
+  if (!task) {
+    const firstLine = full.split('\n').find((l) => l.trim()) || 'Задача из переписки';
+    task = { type: 'add_task', title: firstLine.replace(/^\[[^\]]*\]:\s*/, '').slice(0, 80), category: 'other', priority: 2, deadline: null, estimateMin: null, complexity: null, reward: null, goalId: null, context: '' };
+  }
+  task.context = [task.context, `— Переписка —\n${full}`].filter(Boolean).join('\n\n');
+  const res = applyTgActions([task], { original: '', from, attachments, maxContext: 14000 });
+  return { text: [head, reply ? esc(reply) : null, ...res.lines, ...problemLines].filter(Boolean).join('\n'), batchId: res.batchId };
 }
 
 /** ВКонтакте не понимает HTML — превращаем ответ в обычный текст */

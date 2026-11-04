@@ -32,6 +32,15 @@ export interface EventRec extends Base {
   batch?: string | null;
 }
 
+export interface Attachment {
+  id?: string;
+  kind: 'image' | 'voice';
+  mime?: string;
+  from?: string;
+  text?: string;
+  duration?: number | null;
+}
+
 export interface TaskRec extends Base {
   title: string;
   context?: string;
@@ -49,6 +58,7 @@ export interface TaskRec extends Base {
   actualMin?: number | null;
   createdAt: number;
   source?: 'telegram' | 'app';
+  attachments?: Attachment[];
 }
 
 export interface GoalRec extends Base {
@@ -169,6 +179,7 @@ export interface NoteRec extends Base {
   from?: string | null;
   createdAt: number;
   done?: boolean;
+  attachments?: Attachment[];
 }
 
 export type ThemeName = 'classic' | 'pastel' | 'neon';

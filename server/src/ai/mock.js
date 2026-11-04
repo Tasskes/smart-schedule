@@ -129,6 +129,17 @@ export async function mockComplete({ messages }) {
       };
       break;
     }
+    case 'conversation': {
+      const firstText = (last.split('[РЕЖИМ')[0].match(/\]:\s*(.+)/) || [])[1] || 'Задача из переписки';
+      out = {
+        reply: 'Собрал переписку в одну задачу.',
+        actions: [
+          { type: 'add_task', title: firstText.slice(0, 60), category: 'study', estimateMin: 90, complexity: 3, reward: 18, context: 'Кто просит: собеседник\nЧто сделать: см. переписку' },
+          { type: 'add_note', title: 'лишнее', text: 'не должно создаться' },
+        ],
+      };
+      break;
+    }
     case 'inbox':
     case 'tg': {
       const actions = [];

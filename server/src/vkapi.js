@@ -28,6 +28,29 @@ export function setVkTransport(fn) {
   transport = fn;
 }
 
+// Скачивание вложений (фото, голосовые) по ссылкам ВКонтакте
+let fileFetcher = async (url) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`файл не скачался (${res.status})`);
+    return { buf: Buffer.from(await res.arrayBuffer()), mime: res.headers.get('content-type') || '' };
+  } catch (e) {
+    throw new Error(e.message.startsWith('файл') ? e.message : `файл не скачался: ${netErrorText(e)}`);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+export function setVkFileFetcher(fn) {
+  fileFetcher = fn;
+}
+
+export function vkFetchFile(url) {
+  return fileFetcher(url);
+}
+
 export const vkEnabled = () => !!(config.vk.token && config.vk.groupId);
 
 const VK_HINTS = {
